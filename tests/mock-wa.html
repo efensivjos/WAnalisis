@@ -28,7 +28,7 @@
     return Object.assign({}, data, { serialize() { return JSON.parse(JSON.stringify(data)); } });
   }
 
-  function makeChat({ jid, title, archive, all, initial, group }) {
+  function makeChat({ jid, title, archive, all, initial, group, pageSize = 50 }) {
     // all: mensajes ordenados por t ascendente; inicialmente solo los ultimos `initial` estan cargados
     const loaded = all.slice(-initial);
     let remaining = all.slice(0, all.length - initial);
@@ -42,6 +42,7 @@
       formattedTitle: title, name: title, archive: !!archive, pin: false,
       t: all.length ? all[all.length - 1].t : NOW,
       msgs,
+      _pageSize: pageSize,
       _loadOlder(n) {
         const batch = remaining.slice(-n);
         remaining = remaining.slice(0, remaining.length - batch.length);
@@ -50,6 +51,12 @@
         return batch;
       },
       _push(m) { msgs.models.push(m); chat.t = m.t; },
+      _reset() {
+        const everything = remaining.concat(msgs.models);
+        msgs.models = everything.slice(-initial);
+        remaining = everything.slice(0, everything.length - msgs.models.length);
+        msgs.msgLoadState.noEarlierMsgs = remaining.length === 0;
+      },
     };
     if (group) chat.groupMetadata = group;
     return chat;
@@ -95,7 +102,15 @@
   // ---- Chat 4: estados (debe excluirse) ----
   const status = makeChat({ jid: 'status@broadcast', title: 'Estados', all: [makeMsg('status@broadcast', 0, { t: NOW, body: 'estado' })], initial: 1 });
 
-  const chats = [bank, ana, grp, status];
+  // ---- Chat 5: historial grande para medir rendimiento ----
+  const BIG = '5215566666666@c.us';
+  const bigMsgs = [];
+  for (let i = 0; i < 20000; i++) {
+    bigMsgs.push(makeMsg(BIG, i, { t: NOW - 86400 * 400 + i * 60, fromMe: i % 2 === 0, body: `Mensaje largo numero ${i}, con texto de relleno para simular una conversacion real.` }));
+  }
+  const big = makeChat({ jid: BIG, title: 'Historial grande', all: bigMsgs, initial: 40, pageSize: 500 });
+
+  const chats = [bank, ana, grp, status, big];
 
   const contacts = {
     [ANA]: { id: { _serialized: ANA }, name: 'Ana López', pushname: 'Ani' },
@@ -121,7 +136,7 @@
           chat = arg.chat;
         }
         await new Promise((r) => setTimeout(r, 5));
-        return chat._loadOlder(50);
+        return chat._loadOlder(chat._pageSize);
       },
     },
     WAWebContactGetters: {
@@ -139,6 +154,7 @@
 
   window.__mock = {
     chats, ANA, NOW,
+    resetHistory() { chats.forEach((c) => c._reset()); },
     addNewAnaMessage() { ana._push(makeMsg(ANA, 0, { t: NOW + 60, body: 'Mensaje nuevo despues de exportar' }, true)); },
   };
 })();

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WAnalisis</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-search" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm9 16-4.2-4.2"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 8v5m0 3.5v.01M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Zm0 0v5h5M10 9h1m-1 3h1m-1 3h1"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4 5h16v11H9l-5 4V5Z"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m9 6 6 6-6 6"/></symbol>
+  </svg>
+
+  <div class="app">
+    <header class="top">
+      <img class="logo" src="../../icons/icon48.png" alt="">
+      <div class="top-text">
+        <h1>WAnalisis</h1>
+        <p class="conn" id="conn"><span class="dot"></span><span id="conn-text">Conectando</span></p>
+      </div>
+      <button class="icon-btn" id="refresh" title="Actualizar lista de chats" hidden><svg><use href="#i-refresh"/></svg></button>
+    </header>
+
+    <!-- Sin conexión con WhatsApp Web -->
+    <main class="view view-center" id="view-connect" hidden>
+      <div class="empty-icon"><svg><use href="#i-chat"/></svg></div>
+      <h2 id="connect-title">Conectando con WhatsApp Web</h2>
+      <p class="muted" id="connect-text"></p>
+      <button class="btn primary" id="connect-action" hidden></button>
+    </main>
+
+    <!-- Seleccion de chats y opciones -->
+    <main class="view" id="view-select" hidden>
+      <div class="toolbar">
+        <label class="search">
+          <svg><use href="#i-search"/></svg>
+          <input id="search" type="search" placeholder="Buscar chat" autocomplete="off">
+        </label>
+        <div class="chips" id="chips" role="tablist">
+          <button class="chip active" data-filter="all" role="tab">Todos <span></span></button>
+          <button class="chip" data-filter="individual" role="tab">Personas <span></span></button>
+          <button class="chip" data-filter="group" role="tab">Grupos <span></span></button>
+          <button class="chip" data-filter="archived" role="tab">Archivados <span></span></button>
+        </div>
+      </div>
+
+      <div class="list-head">
+        <label class="check">
+          <input type="checkbox" id="select-all">
+          <span class="box"><svg><use href="#i-check"/></svg></span>
+          <span id="select-all-label">Seleccionar todos</span>
+        </label>
+        <span class="muted" id="sel-count"></span>
+      </div>
+
+      <div class="list" id="list" role="list"></div>
+      <p class="muted list-empty" id="list-empty" hidden>No hay chats que coincidan.</p>
+
+      <details class="options" id="options">
+        <summary>
+          <span class="summary-title">Opciones</span>
+          <span class="summary-text muted" id="options-summary"></span>
+          <svg class="chev"><use href="#i-chevron"/></svg>
+        </summary>
+
+        <div class="opt-group">
+          <div class="opt-label">Formatos</div>
+          <div class="toggles">
+            <label class="toggle"><input type="checkbox" name="fmt" value="txt" checked><span>TXT</span></label>
+            <label class="toggle"><input type="checkbox" name="fmt" value="json" checked><span>JSON</span></label>
+            <label class="toggle"><input type="checkbox" name="fmt" value="csv" checked><span>CSV</span></label>
+          </div>
+          <p class="hint">TXT es una transcripción compacta: la opción con menos tokens para Claude.</p>
+        </div>
+
+        <div class="opt-group">
+          <div class="opt-label">Periodo</div>
+          <label class="radio-card"><input type="radio" name="period" value="all" checked>
+            <span><strong>Todo el historial</strong><small>Carga cada chat hasta el primer mensaje.</small></span></label>
+          <label class="radio-card"><input type="radio" name="period" value="since">
+            <span><strong>Desde una fecha</strong><input type="date" id="since"></span></label>
+          <label class="radio-card" id="period-new"><input type="radio" name="period" value="new">
+            <span><strong>Solo lo nuevo</strong><small id="last-export-text">Desde la última exportación.</small></span></label>
+        </div>
+
+        <div class="opt-group">
+          <div class="opt-label">Velocidad</div>
+          <div class="segmented">
+            <label><input type="radio" name="speed" value="careful"><span>Cuidadosa</span></label>
+            <label><input type="radio" name="speed" value="normal" checked><span>Normal</span></label>
+            <label><input type="radio" name="speed" value="fast"><span>Rápida</span></label>
+          </div>
+          <p class="hint" id="speed-hint"></p>
+        </div>
+
+        <div class="opt-group">
+          <div class="opt-label">Avanzado</div>
+          <label class="field"><span>Tu nombre en la exportación</span><input type="text" id="meName" value="Yo" maxlength="40"></label>
+          <label class="field"><span>Máximo de mensajes por chat</span><input type="number" id="maxPerChat" min="0" step="500" value="0" placeholder="Sin límite"></label>
+          <label class="switch"><input type="checkbox" id="includeSystem"><span class="track"></span><span>Incluir mensajes de sistema</span></label>
+          <label class="switch"><input type="checkbox" id="quick"><span class="track"></span><span>Solo mensajes ya cargados (sin pedir historial)</span></label>
+        </div>
+      </details>
+    </main>
+
+    <!-- Progreso -->
+    <main class="view" id="view-progress" hidden>
+      <div class="hero">
+        <div class="ring">
+          <svg viewBox="0 0 120 120">
+            <circle class="ring-track" cx="60" cy="60" r="52"/>
+            <circle class="ring-fill" id="ring-fill" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="ring-label"><strong id="p-pct">0%</strong><span id="p-count">0 de 0</span></div>
+        </div>
+        <p class="phase" id="p-phase">Preparando</p>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span class="stat-value" id="p-msgs">0</span><span class="stat-label">mensajes</span></div>
+        <div class="stat"><span class="stat-value" id="p-rate">0</span><span class="stat-label">mensajes / s</span></div>
+        <div class="stat"><span class="stat-value" id="p-elapsed">0:00</span><span class="stat-label">transcurrido</span></div>
+        <div class="stat"><span class="stat-value" id="p-eta">-</span><span class="stat-label">restante aprox.</span></div>
+      </div>
+
+      <section class="block" id="p-active-wrap">
+        <h3>Cargando ahora</h3>
+        <ul class="rows" id="p-active"></ul>
+      </section>
+      <section class="block" id="p-recent-wrap" hidden>
+        <h3>Terminados</h3>
+        <ul class="rows" id="p-recent"></ul>
+      </section>
+      <details class="block warn-block" id="p-errors-wrap" hidden>
+        <summary><svg><use href="#i-alert"/></svg><span id="p-errors-title">Avisos</span></summary>
+        <ul class="rows" id="p-errors"></ul>
+      </details>
+      <p class="muted center-note">Puedes seguir usando el navegador. Deja abierta la pestaña de WhatsApp Web hasta que termine.</p>
+    </main>
+
+    <!-- Resultado -->
+    <main class="view" id="view-done" hidden>
+      <div class="result">
+        <div class="result-icon" id="d-icon"><svg><use href="#i-check"/></svg></div>
+        <h2 id="d-title">Exportación lista</h2>
+        <p class="muted" id="d-sub"></p>
+      </div>
+      <div class="file-card" id="d-file-card">
+        <svg><use href="#i-file"/></svg>
+        <div><strong id="d-file"></strong><span class="muted" id="d-size"></span></div>
+      </div>
+      <div class="stats three">
+        <div class="stat"><span class="stat-value" id="d-chats">0</span><span class="stat-label">chats</span></div>
+        <div class="stat"><span class="stat-value" id="d-msgs">0</span><span class="stat-label">mensajes</span></div>
+        <div class="stat"><span class="stat-value" id="d-time">0:00</span><span class="stat-label">duración</span></div>
+      </div>
+      <details class="block warn-block" id="d-errors-wrap" hidden>
+        <summary><svg><use href="#i-alert"/></svg><span id="d-errors-title">Avisos</span></summary>
+        <ul class="rows" id="d-errors"></ul>
+      </details>
+      <div class="tip">
+        <strong>Siguiente paso con Claude</strong>
+        <p>Descomprime el ZIP. Sube los <code>.txt</code> de los chats que quieras analizar, o <code>todos_los_mensajes.csv</code> para un análisis global. <code>index.json</code> resume todos los chats.</p>
+      </div>
+    </main>
+
+    <footer class="bottom" id="footer" hidden>
+      <button class="btn primary block" id="primary">Exportar</button>
+      <button class="btn ghost" id="secondary" hidden>Cancelar</button>
+    </footer>
+  </div>
+
+  <script src="panel.js"></script>
+</body>
+</html>

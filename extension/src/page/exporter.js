@@ -1,15 +1,14 @@
 /*
  * WAnalisis - exportador masivo de chats de WhatsApp Web.
  *
- * Este archivo corre en el "MAIN world" de web.whatsapp.com (mismo contexto
- * JavaScript que la app), para poder usar los modulos internos de WhatsApp Web
- * (window.require('WAWebCollections'), etc.). Recorre todos los chats, carga
- * el historial completo de cada uno y genera un ZIP con JSON y/o CSV.
+ * Corre en el "MAIN world" de web.whatsapp.com (mismo contexto JavaScript que
+ * la app) para usar los módulos internos de WhatsApp Web. Recorre los chats,
+ * carga el historial completo y genera un ZIP con JSON, CSV y/o TXT.
  *
- * No envia nada a ningun servidor: todo se procesa y descarga localmente.
+ * Nada sale del navegador: todo se procesa y descarga localmente.
  *
- * Los nombres de modulos internos estan centralizados en MODULES para que sea
- * facil actualizarlos si WhatsApp los cambia.
+ * Los nombres de módulos internos estan centralizados en MODULES para poder
+ * actualizarlos rápido si WhatsApp los cambia.
  */
 (() => {
   'use strict';
@@ -28,9 +27,7 @@
     meUser: 'WAWebUserPrefsMeUser',
   };
 
-  const MEDIA_TYPES = new Set([
-    'image', 'video', 'audio', 'ptt', 'document', 'sticker', 'gif', 'ptv',
-  ]);
+  const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'ptt', 'document', 'sticker', 'gif', 'ptv']);
 
   const SYSTEM_TYPES = new Set([
     'e2e_notification', 'notification', 'notification_template', 'gp2',
@@ -39,27 +36,30 @@
   ]);
 
   const DEFAULT_OPTIONS = {
-    formats: ['json', 'csv'],
+    formats: ['json', 'csv', 'txt'],
+    chatIds: null, // null = todos los que pasen los filtros
     loadFullHistory: true,
-    since: null, // 'YYYY-MM-DD' o null
+    since: null, // 'YYYY-MM-DD'
     onlyNew: false,
-    maxPerChat: 0, // 0 = sin limite
+    maxPerChat: 0, // 0 = sin límite
     includeIndividuals: true,
     includeGroups: true,
     includeArchived: true,
     includeSystem: false,
     nameFilter: '',
     meName: 'Yo',
-    delayMs: 250,
+    concurrency: 2,
+    delayMs: 150,
     loadTimeoutMs: 45000,
     maxStalls: 3,
   };
 
   // ------------------------------------------------------------------
-  // Utilidades generales
+  // Utilidades
   // ------------------------------------------------------------------
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const encoder = new TextEncoder();
 
   function withTimeout(promise, ms, label) {
     let t;
@@ -71,7 +71,7 @@
     ]).finally(() => clearTimeout(t));
   }
 
-  /** Convierte un Wid (o string) de WhatsApp a texto "numero@servidor". */
+  /** Convierte un Wid / MsgKey de WhatsApp (o string) a texto. */
   function wid(x) {
     if (!x) return '';
     if (typeof x === 'string') return x;
@@ -89,22 +89,18 @@
 
   const jidUser = (jid) => (jid || '').split('@')[0];
   const jidServer = (jid) => (jid || '').split('@')[1] || '';
-
-  function pad(n, w = 2) {
-    return String(n).padStart(w, '0');
-  }
+  const pad = (n) => String(n).padStart(2, '0');
 
   /** ISO 8601 en hora local con desfase, p. ej. 2024-05-01T13:04:05-06:00 */
   function isoLocal(unixSeconds) {
     if (!unixSeconds) return '';
     const d = new Date(unixSeconds * 1000);
     const off = -d.getTimezoneOffset();
-    const sign = off >= 0 ? '+' : '-';
     const abs = Math.abs(off);
     return (
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
       `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` +
-      `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+      `${off >= 0 ? '+' : '-'}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
     );
   }
 
@@ -127,7 +123,7 @@
   const csvRow = (cells) => cells.map(csvCell).join(',') + '\r\n';
 
   // ------------------------------------------------------------------
-  // ZIP (sin dependencias). Usa deflate nativo si existe CompressionStream.
+  // ZIP sin dependencias (deflate nativo via CompressionStream)
   // ------------------------------------------------------------------
 
   const CRC_TABLE = (() => {
@@ -146,7 +142,45 @@
     return (c ^ 0xffffffff) >>> 0;
   }
 
-  const encoder = new TextEncoder();
+  const HAS_DEFLATE = typeof CompressionStream !== 'undefined';
+
+  /** Compresor incremental: se le escriben trozos y al cerrar entrega la entrada lista. */
+  class DeflateSink {
+    constructor() {
+      this.crc = 0;
+      this.size = 0;
+      this.out = [];
+      if (HAS_DEFLATE) {
+        const cs = new CompressionStream('deflate-raw');
+        this.writer = cs.writable.getWriter();
+        this.reading = (async () => {
+          const reader = cs.readable.getReader();
+          let n = 0;
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) return n;
+            this.out.push(value);
+            n += value.length;
+          }
+        })();
+      }
+    }
+
+    async write(bytes) {
+      if (!bytes.length) return;
+      this.crc = crc32Update(this.crc, bytes);
+      this.size += bytes.length;
+      if (this.writer) await this.writer.write(bytes);
+      else this.out.push(bytes);
+    }
+
+    async close() {
+      if (!this.writer) return { crc: this.crc, size: this.size, csize: this.size, method: 0, data: new Blob(this.out) };
+      await this.writer.close();
+      const csize = await this.reading;
+      return { crc: this.crc, size: this.size, csize, method: 8, data: new Blob(this.out) };
+    }
+  }
 
   class ZipWriter {
     constructor() {
@@ -159,42 +193,24 @@
       this.dosDate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
     }
 
-    /** data: string o arreglo de Uint8Array (trozos). */
+    /** data: string o arreglo de Uint8Array. */
     async add(path, data) {
       const chunks = typeof data === 'string' ? [encoder.encode(data)] : data;
-      let crc = 0;
-      let size = 0;
-      for (const c of chunks) {
-        crc = crc32Update(crc, c);
-        size += c.length;
-      }
+      const sink = new DeflateSink();
+      for (const c of chunks) await sink.write(c);
+      this.addPrepared(path, await sink.close());
+    }
 
-      let method = 0;
-      let payload = new Blob(chunks);
-      let csize = size;
-      if (typeof CompressionStream !== 'undefined' && size > 0) {
-        try {
-          const stream = payload.stream().pipeThrough(new CompressionStream('deflate-raw'));
-          const buf = await new Response(stream).arrayBuffer();
-          if (buf.byteLength < size) {
-            payload = new Blob([buf]);
-            csize = buf.byteLength;
-            method = 8;
-          }
-        } catch {
-          /* sin compresion */
-        }
+    /** Agrega una entrada ya comprimida. Sincrono: seguro con tareas en paralelo. */
+    addPrepared(path, { crc, size, csize, method, data }) {
+      if (this.offset + csize > 0xfffffff0 || this.count >= 0xfffe) {
+        throw new Error('El ZIP supera 4 GB o 65 534 archivos. Exporta por partes (filtra por fecha o por chats).');
       }
-
-      if (this.offset + csize > 0xfffffff0 || this.count >= 0xffff) {
-        throw new Error('El ZIP supera el limite de 4 GB / 65535 archivos. Usa filtros (fecha o nombre).');
-      }
-
       const name = encoder.encode(path);
       const local = new DataView(new ArrayBuffer(30));
       local.setUint32(0, 0x04034b50, true);
       local.setUint16(4, 20, true);
-      local.setUint16(6, 0x0800, true); // nombres en UTF-8
+      local.setUint16(6, 0x0800, true); // nombres UTF-8
       local.setUint16(8, method, true);
       local.setUint16(10, this.dosTime, true);
       local.setUint16(12, this.dosDate, true);
@@ -202,7 +218,6 @@
       local.setUint32(18, csize, true);
       local.setUint32(22, size, true);
       local.setUint16(26, name.length, true);
-      local.setUint16(28, 0, true);
 
       const cen = new DataView(new ArrayBuffer(46));
       cen.setUint32(0, 0x02014b50, true);
@@ -218,7 +233,7 @@
       cen.setUint16(28, name.length, true);
       cen.setUint32(42, this.offset, true);
 
-      this.parts.push(local.buffer, name, payload);
+      this.parts.push(local.buffer, name, data);
       this.central.push(cen.buffer, name);
       this.offset += 30 + name.length + csize;
       this.count++;
@@ -261,25 +276,27 @@
     };
   }
 
+  function isReady() {
+    const wa = getWA();
+    return !!(wa && wa.Chat.getModelsArray().length > 0);
+  }
+
   async function waitForWA(timeoutMs = 60000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-      const wa = getWA();
-      if (wa && wa.Chat.getModelsArray().length > 0) return wa;
+      if (isReady()) return getWA();
       await sleep(1000);
     }
     throw new Error(
-      'No se pudo acceder a los datos de WhatsApp Web. Verifica que la sesion este iniciada y ' +
-        'la lista de chats cargada. Si ya lo esta, es posible que WhatsApp haya cambiado sus ' +
-        'modulos internos (ver MODULES en exporter.js).'
+      'No se pudo acceder a los datos de WhatsApp Web. Verifica que la sesión esté iniciada y la ' +
+        'lista de chats cargada. Si ya lo esta, WhatsApp pudo cambiar sus módulos internos (MODULES en exporter.js).'
     );
   }
 
   function getMeJid(wa) {
     try {
       const u = wa.meUser;
-      const me = (u && (u.getMaybeMePnUser?.() || u.getMaybeMeUser?.() || u.getMeUser?.())) || null;
-      return wid(me);
+      return wid((u && (u.getMaybeMePnUser?.() || u.getMaybeMeUser?.() || u.getMeUser?.())) || null);
     } catch {
       return '';
     }
@@ -306,19 +323,14 @@
           const G = wa.getters || {};
           try {
             name =
-              (G.getName && G.getName(c)) ||
-              c.name ||
-              c.verifiedName ||
-              (G.getPushname && G.getPushname(c)) ||
-              c.pushname ||
-              c.notifyName ||
-              '';
+              (G.getName && G.getName(c)) || c.name || c.verifiedName ||
+              (G.getPushname && G.getPushname(c)) || c.pushname || c.notifyName || '';
           } catch {
             name = c.name || c.pushname || '';
           }
           if (!name && c.phoneNumber) name = `+${jidUser(wid(c.phoneNumber))}`;
         }
-        cache.set(jid, name || '');
+        cache.set(jid, name);
       }
       const found = cache.get(jid);
       if (found) return found;
@@ -336,31 +348,31 @@
     return 'individual';
   }
 
-  function chatInfo(chat, nameOf) {
-    const id = wid(chat.id);
-    const kind = chatKind(id);
+  function chatName(chat, nameOf) {
     let name = '';
     try {
       name = chat.formattedTitle || chat.name || '';
     } catch {
       name = chat.name || '';
     }
-    if (!name) name = nameOf(id);
+    return name || nameOf(wid(chat.id));
+  }
 
+  function chatInfo(chat, nameOf) {
+    const id = wid(chat.id);
     const info = {
       id,
-      name,
-      kind,
+      name: chatName(chat, nameOf),
+      kind: chatKind(id),
       archived: !!chat.archive,
       pinned: !!chat.pin,
       last_activity: isoLocal(chat.t),
     };
-
-    if (kind === 'group') {
+    if (info.kind === 'group') {
       try {
         const meta = chat.groupMetadata;
-        const parts = meta?.participants?.getModelsArray?.() || [];
         if (meta?.desc) info.description = meta.desc;
+        const parts = meta?.participants?.getModelsArray?.() || [];
         info.participants = parts.map((p) => {
           const pid = wid(p.id);
           return { id: pid, name: nameOf(pid), admin: !!(p.isAdmin || p.isSuperAdmin) };
@@ -380,11 +392,7 @@
     }
   }
 
-  function msgKey(m) {
-    return wid(m.id) || `${m.t}_${Math.random()}`;
-  }
-
-  /** Normaliza un mensaje al formato de exportacion. Devuelve null si se omite. */
+  /** Normaliza un mensaje al formato de exportación. Devuelve null si se omite. */
   function normalizeMessage(m, ctx) {
     const s = serializeMsg(m);
     const type = s.type || 'unknown';
@@ -403,24 +411,21 @@
     if (typeof text !== 'string') text = '';
 
     const senderId = fromMe ? ctx.meJid || 'me' : wid(s.author) || wid(s.from) || wid(id.remote);
-    const senderName = fromMe ? ctx.options.meName : ctx.nameOf(senderId, s.notifyName || s.pushname);
-
     const out = {
-      id: wid(id) || '',
+      id: wid(id),
       timestamp: s.t || 0,
       datetime: isoLocal(s.t),
       from_me: fromMe,
       sender_id: senderId,
-      sender_name: senderName,
+      sender_name: fromMe ? ctx.options.meName : ctx.nameOf(senderId, s.notifyName || s.pushname),
       type,
       text,
     };
 
-    const quotedId = s.quotedStanzaID || '';
-    if (quotedId) {
-      out.quoted_id = quotedId;
+    if (s.quotedStanzaID) {
+      out.quoted_id = s.quotedStanzaID;
       const qp = wid(s.quotedParticipant);
-      if (qp) out.quoted_sender = ctx.nameOf(qp);
+      if (qp) out.quoted_sender = qp === ctx.meJid ? ctx.options.meName : ctx.nameOf(qp);
       const q = s.quotedMsg;
       if (q && typeof q === 'object') {
         const qText = MEDIA_TYPES.has(q.type) ? q.caption : q.body;
@@ -445,12 +450,17 @@
     return out;
   }
 
+  // ------------------------------------------------------------------
+  // Formatos de salida
+  // ------------------------------------------------------------------
+
   const CSV_HEADER = [
     'chat_id', 'chat_name', 'chat_type', 'message_id', 'datetime', 'timestamp',
     'sender_name', 'sender_id', 'from_me', 'type', 'text', 'quoted_sender',
     'quoted_text', 'forwarded', 'starred', 'media_mimetype', 'media_filename',
     'latitude', 'longitude',
   ];
+  const CSV_HEADER_BYTES = encoder.encode('﻿' + csvRow(CSV_HEADER));
 
   function messageCsvRow(chat, m) {
     return csvRow([
@@ -460,6 +470,64 @@
       m.media?.mimetype || '', m.media?.filename || '', m.location?.lat ?? '',
       m.location?.lng ?? '',
     ]);
+  }
+
+  const KIND_LABEL = { individual: 'chat individual', group: 'grupo', channel: 'canal', broadcast: 'difusión' };
+  const MEDIA_LABEL = {
+    image: 'imagen', video: 'video', gif: 'gif', ptv: 'video', audio: 'audio',
+    ptt: 'nota de voz', sticker: 'sticker', document: 'documento',
+  };
+
+  const trunc = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+  function transcriptBody(m) {
+    const parts = [];
+    if (m.forwarded) parts.push('[reenviado]');
+    if (m.quoted_id) {
+      const who = m.quoted_sender || 'mensaje';
+      parts.push(m.quoted_text ? `[responde a ${who}: "${trunc(m.quoted_text.replace(/\s+/g, ' '), 80)}"]` : `[responde a ${who}]`);
+    }
+    if (m.media) {
+      let label = MEDIA_LABEL[m.type] || 'archivo';
+      if (m.media.filename) label += `: ${m.media.filename}`;
+      else if (m.media.duration && (m.type === 'ptt' || m.type === 'audio' || m.type === 'video')) label += ` ${m.media.duration}s`;
+      parts.push(`[${label}]`);
+    } else if (m.type === 'location') {
+      parts.push(m.location ? `[ubicación ${m.location.lat},${m.location.lng}]` : '[ubicación]');
+    } else if (m.type === 'vcard' || m.type === 'multi_vcard') {
+      parts.push('[contacto]');
+    } else if (m.type === 'poll_creation') {
+      parts.push(`[encuesta${m.poll_options ? `: ${m.poll_options.join(' / ')}` : ''}]`);
+    } else if (m.type !== 'chat' && !m.text) {
+      parts.push(`[${m.type}]`);
+    }
+    if (m.text) parts.push(m.text.replace(/\r?\n/g, '\n    '));
+    return parts.join(' ');
+  }
+
+  /** Transcripción compacta: la forma con menos tokens para que Claude la lea. */
+  function transcript(info, msgs, exportedAt) {
+    const head = [`Chat: ${info.name} (${KIND_LABEL[info.kind] || info.kind})`];
+    if (info.participants?.length) {
+      head.push(`Participantes (${info.participants.length}): ${info.participants.map((p) => p.name).join(', ')}`);
+    }
+    if (msgs.length) {
+      head.push(`Mensajes: ${msgs.length}, del ${msgs[0].datetime.slice(0, 10)} al ${msgs[msgs.length - 1].datetime.slice(0, 10)}`);
+    } else {
+      head.push('Mensajes: 0');
+    }
+    head.push(`Exportado: ${exportedAt}`);
+    const out = [head.join('\n')];
+    let day = '';
+    for (const m of msgs) {
+      const d = m.datetime.slice(0, 10);
+      if (d !== day) {
+        out.push(`\n--- ${d} ---`);
+        day = d;
+      }
+      out.push(`[${m.datetime.slice(11, 16)}] ${m.sender_name}: ${transcriptBody(m)}`);
+    }
+    return out.join('\n') + '\n';
   }
 
   // ------------------------------------------------------------------
@@ -473,8 +541,7 @@
       return await withTimeout(Promise.resolve(fn({ chat })), timeoutMs, 'cargar historial');
     } catch (e) {
       if (/Tiempo de espera/.test(e.message)) throw e;
-      // Firma antigua: loadEarlierMsgs(chat)
-      return await withTimeout(Promise.resolve(fn(chat)), timeoutMs, 'cargar historial');
+      return await withTimeout(Promise.resolve(fn(chat)), timeoutMs, 'cargar historial'); // firma antigua
     }
   }
 
@@ -495,28 +562,32 @@
   }
 
   /**
-   * Devuelve todos los modelos de mensaje del chat con t > minT (o >= sinceT),
-   * cargando historial anterior mientras haga falta.
+   * Devuelve { list, warning }: modelos con t > cutoff en orden cronologico,
+   * cargando historial anterior mientras haga falta. Costo lineal: solo
+   * procesa los lotes nuevos en cada vuelta.
    */
   async function collectMessages(wa, chat, opts, cutoff, onProgress) {
     const byId = new Map();
+    let oldest = Infinity;
+    let warning = '';
     const addAll = (arr) => {
-      if (!arr) return;
-      for (const m of arr) if (m) byId.set(msgKey(m), m);
-    };
-    const oldestT = () => {
-      let min = Infinity;
-      for (const m of byId.values()) if (m.t && m.t < min) min = m.t;
-      return min;
+      for (const m of arr) {
+        if (!m) continue;
+        const k = wid(m.id);
+        if (!k || byId.has(k)) continue;
+        byId.set(k, m);
+        if (m.t && m.t < oldest) oldest = m.t;
+      }
     };
 
     addAll(currentModels(chat));
+    onProgress(byId.size);
 
     if (opts.loadFullHistory) {
       let stalls = 0;
-      while (!state.cancelRequested) {
+      while (!run.cancelRequested) {
         if (noEarlier(chat)) break;
-        if (cutoff && oldestT() <= cutoff) break;
+        if (cutoff && oldest <= cutoff) break;
         if (opts.maxPerChat > 0 && byId.size >= opts.maxPerChat) break;
 
         const before = byId.size;
@@ -524,60 +595,79 @@
         try {
           loaded = await loadEarlier(wa, chat, opts.loadTimeoutMs);
         } catch (e) {
-          log(`Aviso en "${state.currentChat}": ${e.message}`);
+          warning = `historial incompleto: ${e.message}`;
           break;
         }
-        addAll(Array.isArray(loaded) ? loaded : null);
-        addAll(currentModels(chat));
+        if (Array.isArray(loaded)) {
+          if (!loaded.length) break;
+          addAll(loaded);
+        } else {
+          addAll(currentModels(chat));
+        }
         onProgress(byId.size);
 
-        if (Array.isArray(loaded) && loaded.length === 0) break;
         if (byId.size === before) {
-          stalls++;
-          if (stalls >= opts.maxStalls) break;
+          if (++stalls >= opts.maxStalls) break;
         } else {
           stalls = 0;
         }
         if (opts.delayMs > 0) await sleep(opts.delayMs);
       }
+      addAll(currentModels(chat));
     }
 
-    let list = [...byId.values()].filter((m) => !cutoff || (m.t || 0) > cutoff);
+    let list = [...byId.values()];
+    if (cutoff) list = list.filter((m) => (m.t || 0) > cutoff);
     list.sort((a, b) => (a.t || 0) - (b.t || 0));
     if (opts.maxPerChat > 0 && list.length > opts.maxPerChat) list = list.slice(-opts.maxPerChat);
-    return list;
+    return { list, warning };
   }
 
   // ------------------------------------------------------------------
-  // Estado, progreso y overlay
+  // Estado de la corrida y notificaciones
   // ------------------------------------------------------------------
 
-  const state = {
+  const run = {
     status: 'idle', // idle | running | done | error | cancelled
     phase: '',
-    chatIndex: 0,
-    chatTotal: 0,
-    currentChat: '',
-    currentChatMessages: 0,
+    total: 0,
+    done: 0,
     messagesTotal: 0,
+    active: new Map(), // id -> { name, count }
+    recent: [],
+    errors: [],
     startedAt: 0,
     finishedAt: 0,
     error: '',
     fileName: '',
-    log: [],
+    fileSize: 0,
     cancelRequested: false,
   };
+
+  function publicState() {
+    return {
+      status: run.status,
+      phase: run.phase,
+      total: run.total,
+      done: run.done,
+      messagesTotal: run.messagesTotal,
+      active: [...run.active.values()].map((a) => ({ name: a.name, count: a.count })),
+      recent: run.recent.slice(0, 15),
+      errors: run.errors.slice(0, 50),
+      errorCount: run.errors.length,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      now: Date.now(),
+      error: run.error,
+      fileName: run.fileName,
+      fileSize: run.fileSize,
+    };
+  }
 
   let lastPost = 0;
   let pendingPost = null;
 
-  function publicState() {
-    const { cancelRequested, ...rest } = state;
-    return { ...rest, log: state.log.slice(-8) };
-  }
-
   function emit(force = false) {
-    const now = Date.now();
     const send = () => {
       lastPost = Date.now();
       pendingPost = null;
@@ -585,119 +675,182 @@
       window.postMessage({ source: SRC_PAGE, type: 'state', state: s }, location.origin);
       overlay.render(s);
     };
-    if (force || now - lastPost > 250) {
+    const wait = 300 - (Date.now() - lastPost);
+    if (force || wait <= 0) {
       if (pendingPost) clearTimeout(pendingPost);
       send();
     } else if (!pendingPost) {
-      pendingPost = setTimeout(send, 250 - (now - lastPost));
+      pendingPost = setTimeout(send, wait);
     }
   }
 
-  function log(line) {
-    state.log.push(`[${new Date().toLocaleTimeString()}] ${line}`);
-    if (state.log.length > 200) state.log.splice(0, state.log.length - 200);
-    console.info('[WAnalisis]', line);
-    emit();
+  function requestCancel() {
+    if (run.status !== 'running') return;
+    run.cancelRequested = true;
+    run.phase = 'Cancelando: se descargará lo exportado hasta ahora';
+    emit(true);
   }
 
-  const overlay = (() => {
-    let root = null;
-    let els = null;
+  // ------------------------------------------------------------------
+  // Panel flotante dentro de WhatsApp Web (Shadow DOM, sin innerHTML)
+  // ------------------------------------------------------------------
 
-    function el(tag, style, text) {
+  const OVERLAY_CSS = `
+    :host { all: initial; }
+    .card { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647; width: 300px;
+      background: #ffffff; color: #111b21; border-radius: 14px; padding: 14px 16px 12px;
+      font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      box-shadow: 0 10px 30px rgba(11, 20, 26, .22), 0 0 0 1px rgba(11, 20, 26, .06); }
+    .row { display: flex; align-items: center; gap: 8px; }
+    .title { font-weight: 600; font-size: 14px; flex: 1; }
+    .icon-btn { background: none; border: 0; color: #667781; cursor: pointer; font-size: 16px;
+      width: 26px; height: 26px; border-radius: 6px; line-height: 1; }
+    .icon-btn:hover { background: #f0f2f5; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #00a884; flex: none; }
+    .running .dot { animation: pulse 1.2s ease-in-out infinite; }
+    .error .dot, .cancelled .dot { background: #ea0038; animation: none; }
+    @keyframes pulse { 50% { opacity: .3; } }
+    .track { height: 6px; background: #e9edef; border-radius: 3px; overflow: hidden; margin: 10px 0 8px; }
+    .fill { height: 100%; width: 0; background: #00a884; border-radius: 3px; transition: width .3s ease; }
+    .main { font-variant-numeric: tabular-nums; }
+    .sub { color: #667781; font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+    .btn { font: inherit; font-size: 12px; border: 1px solid #d1d7db; background: #fff; color: #111b21;
+      border-radius: 18px; padding: 5px 12px; cursor: pointer; }
+    .btn:hover { background: #f5f6f6; }
+    .pill { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647; display: none; align-items: center;
+      gap: 8px; background: #ffffff; color: #111b21; border-radius: 20px; padding: 8px 14px; cursor: pointer;
+      font: 600 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-variant-numeric: tabular-nums;
+      box-shadow: 0 6px 20px rgba(11, 20, 26, .2), 0 0 0 1px rgba(11, 20, 26, .06); }
+    .min .card { display: none; }
+    .min .pill { display: flex; }
+    .hidden { display: none !important; }
+    @media (prefers-color-scheme: dark) {
+      .card, .pill { background: #233138; color: #e9edef; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+      .icon-btn:hover { background: #2a3942; }
+      .track { background: #374045; }
+      .sub, .icon-btn { color: #8696a0; }
+      .btn { background: #233138; color: #e9edef; border-color: #3b4a54; }
+      .btn:hover { background: #2a3942; }
+    }`;
+
+  const overlay = (() => {
+    let host = null;
+    let wrap = null;
+    let els = null;
+    let dismissed = false;
+    let lastStatus = '';
+
+    function el(tag, cls, text) {
       const e = document.createElement(tag);
-      if (style) e.style.cssText = style;
+      if (cls) e.className = cls;
       if (text) e.textContent = text;
       return e;
     }
 
     function build() {
-      root = el(
-        'div',
-        'position:fixed;right:16px;bottom:16px;z-index:2147483647;width:320px;' +
-          'background:#111b21;color:#e9edef;border-radius:12px;padding:14px 16px;' +
-          'font:13px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;' +
-          'box-shadow:0 8px 28px rgba(0,0,0,.35);'
-      );
-      const head = el('div', 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;');
-      head.append(el('strong', 'font-size:14px;', 'Exportando chats'));
-      const close = el('button', 'background:none;border:0;color:#8696a0;font-size:18px;cursor:pointer;line-height:1;', '×');
+      host = document.createElement('div');
+      host.id = 'wanalisis-overlay';
+      const shadow = host.attachShadow({ mode: 'open' });
+      try {
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(OVERLAY_CSS);
+        shadow.adoptedStyleSheets = [sheet];
+      } catch {
+        shadow.append(el('style', '', OVERLAY_CSS));
+      }
+      wrap = el('div', 'wrap');
+      const card = el('div', 'card');
+      const head = el('div', 'row');
+      const dot = el('span', 'dot');
+      const title = el('span', 'title', 'Exportando chats');
+      const min = el('button', 'icon-btn', '–');
+      min.title = 'Minimizar';
+      min.addEventListener('click', () => wrap.classList.add('min'));
+      const close = el('button', 'icon-btn', '×');
       close.title = 'Ocultar';
-      close.addEventListener('click', () => (root.style.display = 'none'));
-      head.append(close);
-
-      const status = el('div', 'margin-bottom:6px;');
-      const barWrap = el('div', 'height:6px;background:#2a3942;border-radius:3px;overflow:hidden;margin-bottom:6px;');
-      const bar = el('div', 'height:100%;width:0;background:#00a884;transition:width .2s;');
-      barWrap.append(bar);
-      const detail = el('div', 'color:#8696a0;font-size:12px;min-height:34px;word-break:break-word;');
-      const cancel = el(
-        'button',
-        'margin-top:8px;background:#2a3942;color:#e9edef;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;',
-        'Cancelar'
-      );
-      cancel.addEventListener('click', () => requestCancel());
-
-      root.append(head, status, barWrap, detail, cancel);
-      document.body.append(root);
-      els = { status, bar, detail, cancel, title: head.firstChild };
+      close.addEventListener('click', () => {
+        dismissed = true;
+        host.classList.add('hidden');
+        wrap.classList.add('hidden');
+      });
+      head.append(dot, title, min, close);
+      const track = el('div', 'track');
+      const fill = el('div', 'fill');
+      track.append(fill);
+      const main = el('div', 'main');
+      const sub = el('div', 'sub');
+      const actions = el('div', 'actions');
+      const cancel = el('button', 'btn', 'Cancelar');
+      cancel.addEventListener('click', requestCancel);
+      actions.append(cancel);
+      card.append(head, track, main, sub, actions);
+      const pill = el('div', 'pill');
+      const pillDot = el('span', 'dot');
+      const pillText = el('span', '', '');
+      pill.append(pillDot, pillText);
+      pill.addEventListener('click', () => wrap.classList.remove('min'));
+      wrap.append(card, pill);
+      shadow.append(wrap);
+      document.body.append(host);
+      els = { title, fill, main, sub, cancel, pillText, close };
     }
 
     function render(s) {
       if (s.status === 'idle') return;
-      if (!root) build();
-      if (s.status === 'running' && root.style.display === 'none' && s.chatIndex <= 1) root.style.display = '';
-      const pct = s.chatTotal ? Math.round((s.chatIndex / s.chatTotal) * 100) : 0;
-      els.bar.style.width = `${s.status === 'done' ? 100 : pct}%`;
-      els.cancel.style.display = s.status === 'running' ? '' : 'none';
-      const titles = {
-        running: 'Exportando chats',
-        done: 'Exportacion terminada',
-        error: 'Error en la exportacion',
-        cancelled: 'Exportacion cancelada',
-      };
-      els.title.textContent = titles[s.status] || 'Exportando chats';
+      if (s.status === 'running' && lastStatus !== 'running') dismissed = false; // nueva corrida
+      lastStatus = s.status;
+      if (dismissed) return;
+      if (!host) build();
+      host.classList.remove('hidden');
+      wrap.classList.remove('hidden');
+      wrap.className = wrap.className.replace(/\b(running|done|error|cancelled)\b/g, '').trim() + ` ${s.status}`;
+
+      const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
+      els.fill.style.width = `${s.status === 'done' ? 100 : pct}%`;
+      els.cancel.classList.toggle('hidden', s.status !== 'running');
+      const msgs = s.messagesTotal.toLocaleString('es');
+
       if (s.status === 'running') {
-        els.status.textContent = s.chatTotal
-          ? `Chat ${s.chatIndex} de ${s.chatTotal} (${pct}%) - ${s.messagesTotal.toLocaleString()} mensajes`
-          : s.phase;
-        els.detail.textContent = s.currentChat
-          ? `${s.phase}: ${s.currentChat} (${s.currentChatMessages.toLocaleString()} mensajes cargados)`
-          : s.phase;
+        els.title.textContent = 'Exportando chats';
+        els.main.textContent = s.total ? `${s.done} de ${s.total} chats · ${msgs} mensajes` : s.phase;
+        const act = s.active[0];
+        els.sub.textContent = act ? `${act.name} · ${act.count.toLocaleString('es')} mensajes` : s.phase;
+        els.pillText.textContent = `${pct}% · ${msgs} mensajes`;
       } else if (s.status === 'done') {
-        els.status.textContent = `${s.messagesTotal.toLocaleString()} mensajes de ${s.chatTotal} chats.`;
-        els.detail.textContent = `Archivo descargado: ${s.fileName}`;
+        els.title.textContent = 'Exportación lista';
+        els.main.textContent = `${msgs} mensajes de ${s.total} chats`;
+        els.sub.textContent = s.fileName;
+        els.pillText.textContent = 'Exportación lista';
+        wrap.classList.remove('min');
       } else {
-        els.status.textContent = s.error || '';
-        els.detail.textContent = s.fileName ? `Archivo parcial descargado: ${s.fileName}` : '';
+        els.title.textContent = s.status === 'cancelled' ? 'Exportación cancelada' : 'Error al exportar';
+        els.main.textContent = s.error || '';
+        els.sub.textContent = s.fileName ? `Parcial: ${s.fileName}` : '';
+        els.pillText.textContent = els.title.textContent;
+        wrap.classList.remove('min');
       }
     }
 
     return { render };
   })();
 
-  function requestCancel() {
-    if (state.status !== 'running') return;
-    state.cancelRequested = true;
-    state.phase = 'Cancelando (se descargara lo exportado hasta ahora)';
-    emit(true);
-  }
-
   // ------------------------------------------------------------------
-  // Exportacion principal
+  // Exportación
   // ------------------------------------------------------------------
 
   function readLastRun() {
     try {
-      return JSON.parse(localStorage.getItem(LAST_RUN_KEY) || '{}') || {};
+      const raw = JSON.parse(localStorage.getItem(LAST_RUN_KEY) || '{}') || {};
+      return raw.chats ? raw : { at: 0, chats: raw }; // formato v1: mapa plano
     } catch {
-      return {};
+      return { at: 0, chats: {} };
     }
   }
 
-  function writeLastRun(map) {
+  function writeLastRun(data) {
     try {
-      localStorage.setItem(LAST_RUN_KEY, JSON.stringify(map));
+      localStorage.setItem(LAST_RUN_KEY, JSON.stringify(data));
     } catch {
       /* ignorar */
     }
@@ -726,166 +879,222 @@
     return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
   }
 
+  function selectChats(wa, nameOf, opts) {
+    const wanted = Array.isArray(opts.chatIds) ? new Set(opts.chatIds) : null;
+    const filter = (opts.nameFilter || '').trim().toLowerCase();
+    const chats = wa.Chat.getModelsArray().filter((chat) => {
+      const id = wid(chat.id);
+      const kind = chatKind(id);
+      if (kind === 'broadcast' || kind === 'channel') return false;
+      if (wanted) return wanted.has(id);
+      if (kind === 'group' && !opts.includeGroups) return false;
+      if (kind === 'individual' && !opts.includeIndividuals) return false;
+      if (chat.archive && !opts.includeArchived) return false;
+      if (filter && !chatName(chat, nameOf).toLowerCase().includes(filter)) return false;
+      return true;
+    });
+    return chats.sort((a, b) => (b.t || 0) - (a.t || 0));
+  }
+
+  function listChats() {
+    const wa = getWA();
+    if (!wa || !wa.Chat.getModelsArray().length) return { ready: false };
+    const nameOf = makeNameResolver(wa);
+    const last = readLastRun();
+    const chats = selectChats(wa, nameOf, { ...DEFAULT_OPTIONS, chatIds: null }).map((chat) => {
+      const id = wid(chat.id);
+      let unread = 0;
+      try {
+        unread = chat.unreadCount > 0 ? chat.unreadCount : 0;
+      } catch {
+        /* opcional */
+      }
+      const lastT = last.chats[id] || 0;
+      return {
+        id,
+        name: chatName(chat, nameOf),
+        kind: chatKind(id),
+        archived: !!chat.archive,
+        pinned: !!chat.pin,
+        t: chat.t || 0,
+        unread,
+        hasNew: lastT ? (chat.t || 0) > lastT : null,
+      };
+    });
+    return { ready: true, account: getMeJid(wa), lastExportAt: last.at || 0, chats };
+  }
+
   async function runExport(userOptions) {
-    if (state.status === 'running') return;
+    if (run.status === 'running') return { ok: false, error: 'Ya hay una exportación en curso.' };
     const opts = { ...DEFAULT_OPTIONS, ...(userOptions || {}) };
     opts.maxPerChat = Math.max(0, parseInt(opts.maxPerChat, 10) || 0);
     opts.delayMs = Math.max(0, parseInt(opts.delayMs, 10) || 0);
-    const formats = new Set(Array.isArray(opts.formats) && opts.formats.length ? opts.formats : ['json', 'csv']);
+    opts.concurrency = Math.min(6, Math.max(1, parseInt(opts.concurrency, 10) || 1));
+    const formats = new Set(Array.isArray(opts.formats) && opts.formats.length ? opts.formats : DEFAULT_OPTIONS.formats);
 
-    Object.assign(state, {
+    Object.assign(run, {
       status: 'running',
-      phase: 'Esperando a WhatsApp Web',
-      chatIndex: 0,
-      chatTotal: 0,
-      currentChat: '',
-      currentChatMessages: 0,
+      phase: 'Conectando con WhatsApp Web',
+      total: 0,
+      done: 0,
       messagesTotal: 0,
+      active: new Map(),
+      recent: [],
+      errors: [],
       startedAt: Date.now(),
       finishedAt: 0,
       error: '',
       fileName: '',
-      log: [],
+      fileSize: 0,
       cancelRequested: false,
     });
     emit(true);
+    exportLoop(opts, formats); // corre en segundo plano
+    return { ok: true };
+  }
 
+  async function exportLoop(opts, formats) {
     const zip = new ZipWriter();
-    const allCsv = formats.has('csv') ? [encoder.encode('﻿' + csvRow(CSV_HEADER))] : null;
+    const combined = formats.has('csv') ? new DeflateSink() : null;
+    const exportedAt = isoLocal(Date.now() / 1000);
+    const last = readLastRun();
+    const newLast = { at: Math.floor(Date.now() / 1000), chats: { ...last.chats } };
     const index = [];
-    const lastRun = readLastRun();
-    const newLastRun = { ...lastRun };
-    const usedNames = new Set();
-    let wroteAnything = false;
+    let meJid = '';
 
     try {
+      if (combined) await combined.write(CSV_HEADER_BYTES);
       const wa = await waitForWA();
       const nameOf = makeNameResolver(wa);
-      const meJid = getMeJid(wa);
+      meJid = getMeJid(wa);
       const ctx = { options: opts, nameOf, meJid };
       const sinceT = parseSince(opts.since);
-      const filter = (opts.nameFilter || '').trim().toLowerCase();
+      const chats = selectChats(wa, nameOf, opts);
 
-      let chats = wa.Chat.getModelsArray().slice();
-      chats.sort((a, b) => (b.t || 0) - (a.t || 0));
-      chats = chats.filter((chat) => {
+      // Nombres de archivo unicos, asignados antes de paralelizar.
+      const used = new Set();
+      const jobs = chats.map((chat, i) => {
         const id = wid(chat.id);
-        const kind = chatKind(id);
-        if (kind === 'broadcast' || kind === 'channel') return false;
-        if (kind === 'group' && !opts.includeGroups) return false;
-        if (kind === 'individual' && !opts.includeIndividuals) return false;
-        if (chat.archive && !opts.includeArchived) return false;
-        if (filter) {
-          const n = chatInfo(chat, nameOf).name.toLowerCase();
-          if (!n.includes(filter)) return false;
-        }
-        return true;
+        let base = `${slug(chatName(chat, nameOf))}__${jidUser(id)}`;
+        while (used.has(base)) base += '_';
+        used.add(base);
+        return { chat, id, base, i };
       });
 
-      state.chatTotal = chats.length;
-      log(`Chats a exportar: ${chats.length}`);
+      run.total = jobs.length;
+      run.phase = opts.loadFullHistory ? 'Cargando historial' : 'Leyendo mensajes';
+      emit(true);
 
-      for (let i = 0; i < chats.length && !state.cancelRequested; i++) {
-        const chat = chats[i];
+      const processJob = async ({ chat, id, base, i }) => {
         let info;
         try {
           info = chatInfo(chat, nameOf);
-        } catch (e) {
-          info = { id: wid(chat.id), name: wid(chat.id), kind: chatKind(wid(chat.id)) };
+        } catch {
+          info = { id, name: id, kind: chatKind(id) };
         }
-        state.chatIndex = i + 1;
-        state.currentChat = info.name;
-        state.currentChatMessages = 0;
-        state.phase = opts.loadFullHistory ? 'Cargando historial' : 'Leyendo mensajes';
+        const t0 = Date.now();
+        const live = { name: info.name, count: 0 };
+        run.active.set(id, live);
         emit();
 
-        const chatCutoff = Math.max(sinceT, opts.onlyNew ? lastRun[info.id] || 0 : 0);
+        const cutoff = Math.max(sinceT, opts.onlyNew ? last.chats[id] || 0 : 0);
+        const entry = {
+          id, name: info.name, kind: info.kind, archived: !!info.archived,
+          message_count: 0, first_message: null, last_message: null, files: {},
+        };
+        index[i] = entry;
+
+        // Atajo: nada nuevo desde el corte, no hace falta cargar historial.
+        if (cutoff && (chat.t || 0) <= cutoff) {
+          entry.skipped = 'sin mensajes nuevos';
+          run.active.delete(id);
+          run.done++;
+          emit();
+          return;
+        }
 
         let normalized = [];
-        let error = '';
         try {
-          const models = await collectMessages(wa, chat, opts, chatCutoff, (n) => {
-            state.currentChatMessages = n;
+          const { list: models, warning } = await collectMessages(wa, chat, opts, cutoff, (n) => {
+            live.count = n;
             emit();
           });
+          if (warning) {
+            entry.error = warning;
+            run.errors.push({ name: info.name, error: warning });
+          }
           for (const m of models) {
             try {
               const n = normalizeMessage(m, ctx);
               if (n) normalized.push(n);
-            } catch (e) {
+            } catch {
               /* mensaje ilegible: se omite */
             }
           }
         } catch (e) {
-          error = e.message || String(e);
-          log(`Error en "${info.name}": ${error}`);
+          entry.error = e.message || String(e);
+          run.errors.push({ name: info.name, error: entry.error });
         }
 
         const first = normalized[0];
-        const last = normalized[normalized.length - 1];
-        if (last) newLastRun[info.id] = Math.max(newLastRun[info.id] || 0, last.timestamp);
+        const lastMsg = normalized[normalized.length - 1];
+        entry.message_count = normalized.length;
+        entry.first_message = first ? first.datetime : null;
+        entry.last_message = lastMsg ? lastMsg.datetime : null;
+        if (lastMsg && !entry.error) newLast.chats[id] = Math.max(newLast.chats[id] || 0, lastMsg.timestamp);
 
-        let base = `${slug(info.name)}__${jidUser(info.id)}`;
-        while (usedNames.has(base)) base += '_';
-        usedNames.add(base);
-
-        const entry = {
-          id: info.id,
-          name: info.name,
-          kind: info.kind,
-          archived: info.archived,
-          message_count: normalized.length,
-          first_message: first ? first.datetime : null,
-          last_message: last ? last.datetime : null,
-          files: {},
-        };
-        if (error) entry.error = error;
-
-        if (normalized.length > 0 || !opts.onlyNew) {
-          state.phase = 'Escribiendo archivos';
-          emit();
+        if (normalized.length || !opts.onlyNew) {
           if (formats.has('json')) {
-            const path = `json/${base}.json`;
+            entry.files.json = `json/${base}.json`;
             await zip.add(
-              path,
-              JSON.stringify({ chat: info, exported_at: isoLocal(Date.now() / 1000), message_count: normalized.length, messages: normalized })
+              entry.files.json,
+              JSON.stringify({ chat: info, exported_at: exportedAt, message_count: normalized.length, messages: normalized })
             );
-            entry.files.json = path;
           }
           if (formats.has('csv')) {
-            const path = `csv/${base}.csv`;
-            const rows = normalized.map((m) => messageCsvRow(info, m));
-            await zip.add(path, '﻿' + csvRow(CSV_HEADER) + rows.join(''));
-            for (const r of rows) allCsv.push(encoder.encode(r));
-            entry.files.csv = path;
+            entry.files.csv = `csv/${base}.csv`;
+            let rows = '';
+            for (const m of normalized) rows += messageCsvRow(info, m);
+            const bytes = encoder.encode(rows);
+            await zip.add(entry.files.csv, [CSV_HEADER_BYTES, bytes]);
+            await combined.write(bytes);
           }
-          wroteAnything = true;
+          if (formats.has('txt')) {
+            entry.files.txt = `txt/${base}.txt`;
+            await zip.add(entry.files.txt, transcript(info, normalized, exportedAt));
+          }
         }
 
-        index.push(entry);
-        state.messagesTotal += normalized.length;
-        normalized = null;
+        run.messagesTotal += normalized.length;
+        run.active.delete(id);
+        run.done++;
+        run.recent.unshift({ name: info.name, count: normalized.length, ms: Date.now() - t0, error: !!entry.error });
+        if (run.recent.length > 15) run.recent.length = 15;
         emit();
-        await sleep(0);
-      }
+      };
 
-      state.phase = 'Generando ZIP';
-      state.currentChat = '';
+      let next = 0;
+      const worker = async () => {
+        while (!run.cancelRequested && next < jobs.length) await processJob(jobs[next++]);
+      };
+      await Promise.all(Array.from({ length: Math.min(opts.concurrency, jobs.length) }, worker));
+
+      run.phase = 'Generando ZIP';
       emit(true);
-
-      if (allCsv) await zip.add('todos_los_mensajes.csv', allCsv);
+      const finalIndex = index.filter(Boolean);
+      if (combined) zip.addPrepared('todos_los_mensajes.csv', await combined.close());
       await zip.add(
         'index.json',
         JSON.stringify(
           {
-            exported_at: isoLocal(Date.now() / 1000),
+            exported_at: exportedAt,
             tool: 'WAnalisis Chrome extension',
             account: meJid || null,
             options: { ...opts, formats: [...formats] },
-            complete: !state.cancelRequested,
-            chat_count: index.length,
-            message_count: state.messagesTotal,
-            chats: index,
+            complete: !run.cancelRequested,
+            chat_count: finalIndex.length,
+            message_count: run.messagesTotal,
+            chats: finalIndex,
           },
           null,
           2
@@ -893,45 +1102,50 @@
       );
       await zip.add('LEEME.txt', readme(formats));
 
-      const fileName = `whatsapp-export-${stamp()}${state.cancelRequested ? '-parcial' : ''}.zip`;
-      download(zip.finish(), fileName);
-      state.fileName = fileName;
-      if (!state.cancelRequested) writeLastRun(newLastRun);
-
-      state.status = state.cancelRequested ? 'cancelled' : 'done';
-      state.error = state.cancelRequested ? 'Cancelada por el usuario.' : '';
-      state.phase = '';
-      state.finishedAt = Date.now();
-      log(`Listo: ${state.messagesTotal} mensajes en ${index.length} chats -> ${fileName}`);
-      if (!wroteAnything) log('No habia mensajes nuevos que exportar.');
+      const fileName = `whatsapp-export-${stamp()}${run.cancelRequested ? '-parcial' : ''}.zip`;
+      const blob = zip.finish();
+      download(blob, fileName);
+      if (!run.cancelRequested) writeLastRun(newLast);
+      Object.assign(run, {
+        status: run.cancelRequested ? 'cancelled' : 'done',
+        error: run.cancelRequested ? 'Cancelada por el usuario.' : '',
+        phase: '',
+        fileName,
+        fileSize: blob.size,
+      });
     } catch (e) {
-      state.status = 'error';
-      state.error = e.message || String(e);
-      state.finishedAt = Date.now();
-      log(`Error: ${state.error}`);
-      if (index.length) {
+      run.status = 'error';
+      run.error = e.message || String(e);
+      console.error('[WAnalisis]', e);
+      const partial = index.filter(Boolean);
+      if (partial.length) {
         try {
-          await zip.add('index.json', JSON.stringify({ complete: false, error: state.error, chats: index }, null, 2));
+          await zip.add('index.json', JSON.stringify({ complete: false, error: run.error, chats: partial }, null, 2));
           const fileName = `whatsapp-export-${stamp()}-parcial.zip`;
-          download(zip.finish(), fileName);
-          state.fileName = fileName;
+          const blob = zip.finish();
+          download(blob, fileName);
+          run.fileName = fileName;
+          run.fileSize = blob.size;
         } catch {
-          /* nada mas que hacer */
+          /* nada más que hacer */
         }
       }
     } finally {
-      state.cancelRequested = false;
+      run.finishedAt = Date.now();
+      run.active.clear();
+      run.cancelRequested = false;
       emit(true);
     }
   }
 
   function readme(formats) {
     const lines = [
-      'Exportacion de chats de WhatsApp Web (WAnalisis)',
+      'Exportación de chats de WhatsApp Web (WAnalisis)',
       '',
       'Contenido:',
       '  index.json               Lista de chats con conteo de mensajes, fechas y rutas de archivos.',
     ];
+    if (formats.has('txt')) lines.push('  txt/<chat>.txt           Transcripción legible por chat. Es el formato con menos tokens para Claude.');
     if (formats.has('json')) lines.push('  json/<chat>.json         Un archivo por chat: metadatos del chat y lista de mensajes.');
     if (formats.has('csv')) {
       lines.push('  csv/<chat>.csv           Un archivo por chat (UTF-8 con BOM, compatible con Excel).');
@@ -939,39 +1153,55 @@
     }
     lines.push(
       '',
-      'Campos de cada mensaje:',
+      'Campos de cada mensaje (JSON/CSV):',
       '  datetime     Fecha y hora local (ISO 8601).',
       '  timestamp    Segundos Unix.',
-      '  sender_name  Nombre del remitente (tu nombre configurado si from_me = true).',
+      '  sender_name  Remitente (tu nombre configurado si from_me = true).',
       '  type         chat (texto), image, video, audio, ptt (nota de voz), document, sticker, location, ...',
-      '  text         Texto del mensaje o pie de foto. Los archivos multimedia no se incluyen, solo sus metadatos.',
-      '  quoted_*     Mensaje al que se respondio, si aplica.',
+      '  text         Texto o pie de foto. Los archivos multimedia no se incluyen, solo sus metadatos.',
+      '  quoted_*     Mensaje al que se respondió, si aplica.',
       '',
-      'Sugerencia para Claude: sube index.json junto con los archivos de los chats que quieras analizar,',
-      'o todos_los_mensajes.csv para un analisis global.',
+      'Sugerencias para Claude:',
+      '  - Para leer conversaciones, sube los .txt de los chats que te interesen.',
+      '  - Para análisis cuantitativo (quien escribe más, horarios, tendencias), usa todos_los_mensajes.csv.',
+      '  - index.json da el panorama general para decidir que chats revisar.',
       ''
     );
     return lines.join('\r\n');
   }
 
   // ------------------------------------------------------------------
-  // Mensajeria con la extension
+  // Mensajeria con la extension (RPC via window.postMessage)
   // ------------------------------------------------------------------
 
-  window.addEventListener('message', (e) => {
-    if (e.source !== window || !e.data || e.data.source !== SRC_EXT) return;
-    const { type, options } = e.data;
-    if (type === 'start') runExport(options);
-    else if (type === 'cancel') requestCancel();
-    else if (type === 'getState') emit(true);
+  const RPC = {
+    status: () => ({ ready: isReady(), state: publicState() }),
+    listChats: () => listChats(),
+    start: (params) => runExport(params?.options),
+    cancel: () => {
+      requestCancel();
+      return { ok: true };
+    },
+  };
+
+  window.addEventListener('message', async (e) => {
+    if (e.source !== window || !e.data || e.data.source !== SRC_EXT || e.data.type !== 'rpc') return;
+    const { id, method, params } = e.data;
+    let result;
+    try {
+      if (!RPC[method]) throw new Error(`Método desconocido: ${method}`);
+      result = await RPC[method](params);
+    } catch (err) {
+      result = { error: err.message || String(err) };
+    }
+    window.postMessage({ source: SRC_PAGE, type: 'rpc-result', id, result }, location.origin);
   });
 
   window.__WAExport = {
     start: runExport,
     cancel: requestCancel,
     getState: publicState,
-    _internals: { ZipWriter, crc32Update, csvRow, slug, wid, isoLocal, normalizeMessage, MODULES },
+    listChats,
+    _internals: { ZipWriter, DeflateSink, crc32Update, csvRow, slug, wid, isoLocal, normalizeMessage, transcript, MODULES },
   };
-
-  window.postMessage({ source: SRC_PAGE, type: 'state', state: publicState() }, location.origin);
 })();
