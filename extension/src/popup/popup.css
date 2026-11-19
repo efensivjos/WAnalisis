@@ -1,0 +1,78 @@
+:root {
+  --bg: #ffffff;
+  --fg: #111b21;
+  --muted: #667781;
+  --line: #e9edef;
+  --accent: #008069;
+  --accent-fg: #ffffff;
+  --track: #e9edef;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111b21;
+    --fg: #e9edef;
+    --muted: #8696a0;
+    --line: #2a3942;
+    --accent: #00a884;
+    --accent-fg: #111b21;
+    --track: #2a3942;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  width: 340px;
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+h1 { font-size: 16px; margin: 0; }
+.sub { margin: 2px 0 10px; color: var(--muted); }
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0 0 8px;
+  padding: 6px 10px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+legend { color: var(--muted); font-size: 12px; padding: 0 4px; }
+label { display: inline-flex; align-items: center; gap: 6px; }
+label.full { flex-basis: 100%; }
+input[type="text"], input[type="number"], input[type="date"] {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font: inherit;
+  min-width: 0;
+}
+input[type="number"] { width: 80px; }
+label.full input[type="text"] { flex: 1; }
+details { margin: 0 0 8px; }
+details label { display: flex; justify-content: space-between; margin-top: 6px; }
+summary { cursor: pointer; color: var(--muted); }
+.actions { display: flex; gap: 8px; }
+button {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; flex: 1; }
+button:disabled { opacity: .5; cursor: default; }
+.notice { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+.notice p { margin: 0 0 8px; }
+.notice button { width: 100%; }
+#status { margin-top: 10px; }
+.bar { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+#bar-fill { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+#status p { margin: 6px 0 0; word-break: break-word; }
+.muted { color: var(--muted); font-size: 12px; }
+footer { margin-top: 10px; }

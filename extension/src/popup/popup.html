@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>WAnalisis</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Exportar chats</h1>
+    <p class="sub">WhatsApp Web a JSON / CSV, todo en un ZIP.</p>
+  </header>
+
+  <section id="no-tab" class="notice" hidden>
+    <p>Abre WhatsApp Web e inicia sesion para exportar.</p>
+    <button id="open-wa" class="primary">Abrir WhatsApp Web</button>
+  </section>
+
+  <section id="reload-tab" class="notice" hidden>
+    <p>Recarga la pestana de WhatsApp Web para activar la extension.</p>
+    <button id="reload-wa" class="primary">Recargar pestana</button>
+  </section>
+
+  <form id="opts">
+    <fieldset>
+      <legend>Formato</legend>
+      <label><input type="checkbox" name="fmt_json" checked> JSON</label>
+      <label><input type="checkbox" name="fmt_csv" checked> CSV</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Chats</legend>
+      <label><input type="checkbox" name="includeIndividuals" checked> Individuales</label>
+      <label><input type="checkbox" name="includeGroups" checked> Grupos</label>
+      <label><input type="checkbox" name="includeArchived" checked> Archivados</label>
+      <label class="full">Solo chats que contengan
+        <input type="text" name="nameFilter" placeholder="(todos)">
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Mensajes</legend>
+      <label class="full"><input type="checkbox" name="loadFullHistory" checked> Cargar historial completo (mas lento)</label>
+      <label class="full"><input type="checkbox" name="onlyNew"> Solo mensajes nuevos desde la ultima exportacion</label>
+      <label class="full"><input type="checkbox" name="includeSystem"> Incluir mensajes de sistema</label>
+      <label>Desde <input type="date" name="since"></label>
+      <label>Max. por chat <input type="number" name="maxPerChat" min="0" step="100" value="0" title="0 = sin limite"></label>
+    </fieldset>
+
+    <details>
+      <summary>Avanzado</summary>
+      <label>Tu nombre en la exportacion <input type="text" name="meName" value="Yo"></label>
+      <label>Pausa entre cargas (ms) <input type="number" name="delayMs" min="0" step="50" value="250"></label>
+    </details>
+
+    <div class="actions">
+      <button type="submit" id="start" class="primary">Exportar todo</button>
+      <button type="button" id="cancel" hidden>Cancelar</button>
+    </div>
+  </form>
+
+  <section id="status" hidden>
+    <div class="bar"><div id="bar-fill"></div></div>
+    <p id="status-main"></p>
+    <p id="status-detail" class="muted"></p>
+  </section>
+
+  <footer class="muted">Todo se procesa en tu navegador. No se envia nada a terceros.</footer>
+  <script src="popup.js"></script>
+</body>
+</html>
