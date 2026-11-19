@@ -19,7 +19,10 @@ Requiere Chrome 116 o posterior.
 ## Uso
 
 1. Con WhatsApp Web abierto, haz clic en el ícono de la extensión. Se abre el panel lateral con todos tus chats.
-2. Por defecto todos están seleccionados. Usa la búsqueda o los filtros (Personas, Grupos, Archivados) para ajustar la selección.
+2. Por defecto todos están seleccionados. Arriba de la lista puedes:
+   - **Incluir grupos:** apágalo para dejar fuera todos los grupos.
+   - **Último mensaje:** exporta solo los chats con actividad reciente (Día, Semana, Mes o 3 meses). "Cualquiera" no filtra por fecha.
+   - Usar la búsqueda o las pestañas (Personas, Grupos, Archivados) para ajustar la selección a mano.
 3. Revisa **Opciones** si quieres cambiar formatos, periodo o velocidad.
 4. Clic en **Exportar N chats**. El panel muestra avance, mensajes por segundo y tiempo restante. También aparece un indicador pequeño dentro de WhatsApp Web.
 5. Al terminar se descarga `whatsapp-export-AAAAMMDD-HHMM.zip`. Si cancelas, se descarga lo exportado hasta ese momento (`-parcial.zip`).
@@ -28,6 +31,8 @@ Requiere Chrome 116 o posterior.
 
 | Opción | Efecto |
 | --- | --- |
+| Incluir grupos | Encendido: exporta chats individuales y grupos. Apagado: solo chats individuales. |
+| Último mensaje | Solo chats cuyo último mensaje cae en el último día, semana (7 días), mes (30 días) o 3 meses (90 días). No recorta los mensajes de cada chat; para eso está **Periodo**. |
 | Formatos | TXT (transcripción compacta), JSON (estructurado) y CSV (tabla). Puedes elegir cualquier combinación. |
 | Periodo | Todo el historial, desde una fecha, o solo lo nuevo desde la última exportación completa. |
 | Velocidad | Cuidadosa (1 chat a la vez con pausas), Normal (2 en paralelo, recomendado) o Rápida (4 en paralelo sin pausas). |
@@ -149,7 +154,7 @@ Detalles de eficiencia:
 
 ## Pruebas
 
-La prueba end-to-end carga la extensión real en Chromium, simula WhatsApp Web interceptando `https://web.whatsapp.com/`, maneja el panel lateral como lo haría una persona y valida cada ZIP: conteos (incluye un chat de 20 000 mensajes), orden, ausencia de duplicados, formato TXT, CSV con comas y saltos de línea, ids con formato nuevo `$1`, firma antigua de `loadEarlierMsgs`, modo incremental, selección manual, cancelación con descarga parcial y persistencia de opciones. Durante todo el flujo registra cada solicitud de red y falla si aparece alguna, y verifica que no quede ningún rastro en el almacenamiento de WhatsApp Web. Antes corre la auditoría estática de privacidad.
+La prueba end-to-end carga la extensión real en Chromium, simula WhatsApp Web interceptando `https://web.whatsapp.com/`, maneja el panel lateral como lo haría una persona y valida cada ZIP: conteos (incluye un chat de 20 000 mensajes), orden, ausencia de duplicados, formato TXT, CSV con comas y saltos de línea, ids con formato nuevo `$1`, firma antigua de `loadEarlierMsgs`, modo incremental, selección manual, filtros de grupos y de fecha del último mensaje, cancelación con descarga parcial y persistencia de opciones. Durante todo el flujo registra cada solicitud de red y falla si aparece alguna, y verifica que no quede ningún rastro en el almacenamiento de WhatsApp Web. Antes corre la auditoría estática de privacidad.
 
 ```bash
 npm install

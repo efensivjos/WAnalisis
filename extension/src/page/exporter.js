@@ -46,6 +46,7 @@
     maxPerChat: 0, // 0 = sin límite
     includeIndividuals: true,
     includeGroups: true,
+    activityDays: 0, // 0 = cualquier fecha; N = solo chats con ultimo mensaje en los ultimos N dias
     includeArchived: true,
     includeSystem: false,
     nameFilter: '',
@@ -889,12 +890,16 @@
   function selectChats(wa, nameOf, opts) {
     const wanted = Array.isArray(opts.chatIds) ? new Set(opts.chatIds) : null;
     const filter = (opts.nameFilter || '').trim().toLowerCase();
+    const days = Math.max(0, Number(opts.activityDays) || 0);
+    const activeSince = days ? Math.floor(Date.now() / 1000) - days * 86400 : 0;
     const chats = wa.Chat.getModelsArray().filter((chat) => {
       const id = wid(chat.id);
       const kind = chatKind(id);
       if (kind === 'broadcast' || kind === 'channel') return false;
-      if (wanted) return wanted.has(id);
+      // Estos dos filtros aplican siempre, tambien sobre una seleccion explicita.
       if (kind === 'group' && !opts.includeGroups) return false;
+      if (activeSince && (chat.t || 0) < activeSince) return false;
+      if (wanted) return wanted.has(id);
       if (kind === 'individual' && !opts.includeIndividuals) return false;
       if (chat.archive && !opts.includeArchived) return false;
       if (filter && !chatName(chat, nameOf).toLowerCase().includes(filter)) return false;

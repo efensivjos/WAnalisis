@@ -10,7 +10,8 @@
  * WAWebWidFactory y WAWebUserPrefsMeUser.
  */
 (() => {
-  const NOW = Math.floor(Date.UTC(2026, 10, 1, 12, 0, 0) / 1000);
+  // Hace 2 horas: Ana y Banco tienen actividad en el ultimo dia, el grupo hace ~10 dias, 'Historial grande' hace ~1 ano.
+  const NOW = Math.floor(Date.now() / 1000) - 7200;
   const ME = '5215500000000@c.us';
   let seq = 0;
 
@@ -155,6 +156,7 @@
   window.__mock = {
     chats, ANA, NOW,
     resetHistory() { chats.forEach((c) => c._reset()); },
+    ageAll(sec) { chats.forEach((c) => { c.t -= sec; }); },
     addNewAnaMessage() { ana._push(makeMsg(ANA, 0, { t: NOW + 60, body: 'Mensaje nuevo despues de exportar' }, true)); },
   };
 })();

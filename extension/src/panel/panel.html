@@ -43,6 +43,19 @@
           <svg><use href="#i-search"/></svg>
           <input id="search" type="search" placeholder="Buscar chat" autocomplete="off">
         </label>
+        <div class="filters">
+          <div class="filters-head">
+            <span class="opt-label">Último mensaje</span>
+            <label class="switch compact"><input type="checkbox" id="includeGroups" checked><span class="track"></span><span>Incluir grupos</span></label>
+          </div>
+          <div class="segmented" id="activity" role="radiogroup" aria-label="Fecha del último mensaje">
+            <label title="Sin filtro de fecha"><input type="radio" name="activity" value="0" checked><span>Cualquiera</span></label>
+            <label title="Último mensaje en las últimas 24 horas"><input type="radio" name="activity" value="1"><span>Día</span></label>
+            <label title="Último mensaje en los últimos 7 días"><input type="radio" name="activity" value="7"><span>Semana</span></label>
+            <label title="Último mensaje en los últimos 30 días"><input type="radio" name="activity" value="30"><span>Mes</span></label>
+            <label title="Último mensaje en los últimos 90 días"><input type="radio" name="activity" value="90"><span>3 meses</span></label>
+          </div>
+        </div>
         <div class="chips" id="chips" role="tablist">
           <button class="chip active" data-filter="all" role="tab">Todos <span></span></button>
           <button class="chip" data-filter="individual" role="tab">Personas <span></span></button>

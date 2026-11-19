@@ -96,6 +96,10 @@ h1 { font-size: 15px; margin: 0; letter-spacing: -.01em; }
 .search { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border-radius: 10px; padding: 0 12px; color: var(--muted); }
 .search:focus-within { box-shadow: 0 0 0 2px var(--accent); }
 .search input { flex: 1; border: 0; background: transparent; color: var(--fg); font: inherit; padding: 9px 0; outline: none; min-width: 0; }
+.filters { margin-top: 10px; }
+.filters-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.filters-head .opt-label { margin: 0; }
+.switch.compact { margin: 0; font-size: 12px; gap: 8px; }
 .chips { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
 .chip { border: 1px solid var(--line-strong); background: var(--bg); border-radius: 16px; padding: 4px 10px; cursor: pointer; white-space: nowrap; font-size: 12px; color: var(--muted); }
 .chip span { font-variant-numeric: tabular-nums; opacity: .8; }

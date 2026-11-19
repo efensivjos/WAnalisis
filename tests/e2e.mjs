@@ -276,13 +276,68 @@ try {
   assert.equal(idx3.chat_count, 1);
   assert.equal(idx3.chats[0].message_count, 100);
 
-  // ---------- Cancelacion: descarga parcial ----------
+  // ---------- Filtros: incluir grupos y fecha del ultimo mensaje ----------
   await panel.click('#primary');
   await panel.waitForSelector('#view-select:not([hidden])');
   await panel.fill('#search', '');
   await panel.waitForFunction(() => document.querySelectorAll('.row').length === 4);
   await panel.fill('#maxPerChat', '0');
   await panel.click('.list-head .check'); // seleccionar todos
+  assert.equal(await panel.textContent('#primary'), 'Exportar 4 chats');
+
+  await panel.click('#activity label:has(input[value="1"])'); // ultimo dia
+  await panel.waitForFunction(() => document.querySelectorAll('.row').length === 2);
+  assert.equal(await panel.textContent('#primary'), 'Exportar 2 chats');
+  assert.equal(await panel.textContent('#sel-count'), '2 de 2');
+  await panel.click('#activity label:has(input[value="7"])'); // ultima semana
+  await panel.waitForFunction(() => document.querySelectorAll('.row').length === 2);
+  await panel.click('#activity label:has(input[value="90"])'); // 3 meses
+  await panel.waitForFunction(() => document.querySelectorAll('.row').length === 3);
+  await panel.click('#activity label:has(input[value="30"])'); // ultimo mes
+  await panel.waitForFunction(() => document.querySelectorAll('.row').length === 3);
+  assert.equal(await panel.textContent('.chip[data-filter="group"] span'), '1');
+  await panel.click('label.switch:has(#includeGroups)'); // sin grupos
+  await panel.waitForFunction(() => document.querySelectorAll('.row').length === 2);
+  assert.ok(await panel.locator('.chip[data-filter="group"]').isHidden(), 'oculta el filtro de grupos');
+  assert.equal(await panel.textContent('#primary'), 'Exportar 2 chats');
+  await panel.waitForTimeout(300); // deja terminar la animacion del interruptor
+  await shot(panel, '6-filtros');
+
+  const r4 = await exportFromPanel(panel, wa);
+  const idx4 = JSON.parse(r4.files['index.json']);
+  assert.deepEqual(idx4.chats.map((c) => c.name).sort(), ['Ana López', 'Banco, S.A. "Atención"']);
+  assert.equal(idx4.options.includeGroups, false);
+  assert.equal(idx4.options.activityDays, 30);
+  // El exportador tambien aplica los filtros aunque reciba ids de grupos o chats antiguos.
+  const dlDirect = wa.waitForEvent('download');
+  await wa.evaluate(() => {
+    const ids = window.__WAExport.listChats().chats.map((c) => c.id);
+    window.__WAExport.start({ chatIds: ids, includeGroups: false, activityDays: 30, formats: ['json'], concurrency: 4, delayMs: 0 });
+  });
+  const directFile = path.join(mkdtempSync(path.join(tmpdir(), 'wa-dl-')), 'direct.zip');
+  await (await dlDirect).saveAs(directFile);
+  const idxDirect = JSON.parse(readZip(readFileSync(directFile))['index.json']);
+  assert.deepEqual(idxDirect.chats.map((c) => c.name).sort(), ['Ana López', 'Banco, S.A. "Atención"']);
+  await wa.waitForFunction(() => window.__WAExport.getState().status === 'done');
+
+  // Sin chats en el rango: boton deshabilitado con explicacion.
+  await panel.click('#primary');
+  await panel.waitForSelector('#view-select:not([hidden])');
+  await panel.click('label.switch:has(#includeGroups)'); // con grupos
+  await panel.click('#activity label:has(input[value="1"])');
+  await wa.evaluate(() => window.__mock.ageAll(3 * 86400));
+  await panel.click('#refresh');
+  await panel.waitForFunction(() => document.querySelectorAll('.row').length === 0);
+  assert.equal(await panel.textContent('#primary'), 'Ningún chat cumple los filtros');
+  assert.ok(await panel.locator('#primary').isDisabled());
+  assert.match(await panel.textContent('#list-empty'), /Ningún chat cumple los filtros/);
+  await wa.evaluate(() => window.__mock.ageAll(-3 * 86400));
+  await panel.click('#activity label:has(input[value="0"])');
+  await panel.click('#refresh');
+  await panel.waitForFunction(() => document.querySelectorAll('.row').length === 4);
+
+  // ---------- Cancelacion: descarga parcial ----------
+  assert.equal(await panel.textContent('#primary'), 'Exportar 4 chats');
   await panel.click('.segmented label:has(input[value="careful"])');
   await wa.evaluate(() => window.__mock.resetHistory());
   const dl = wa.waitForEvent('download');
@@ -306,6 +361,8 @@ try {
   panel = await openPanel(context, extId);
   assert.equal(await panel.locator('input[name="fmt"][value="csv"]').isChecked(), false);
   assert.equal(await panel.locator('input[name="speed"][value="careful"]').isChecked(), true);
+  assert.equal(await panel.locator('#includeGroups').isChecked(), true);
+  assert.equal(await panel.locator('input[name="activity"][value="0"]').isChecked(), true);
   await panel.waitForFunction(async () => {
     const r = (await chrome.storage.local.get('wa-export-last-run'))['wa-export-last-run'];
     return r && r.chats['5215599999999@c.us'] === 123 && r.chats['5215511111111@c.us'] > 0;

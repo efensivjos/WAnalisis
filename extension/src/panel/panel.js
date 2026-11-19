@@ -22,6 +22,7 @@ const ui = {
   selected: new Set(),
   filter: 'all',
   query: '',
+  pool: [], // chats que pasan los filtros de grupos y fecha del ultimo mensaje
   visible: [],
   rendered: 0,
   lastExportAt: 0,
@@ -162,7 +163,6 @@ async function loadChats() {
     const acct = res.account ? `+${res.account.split('@')[0]}` : '';
     setConn('ok', acct ? `Conectado · ${acct}` : 'Conectado');
     updateLastExport();
-    updateChipCounts();
     applyFilter();
     show('select');
     if (firstLoad) $('search').focus();
@@ -178,6 +178,20 @@ async function loadChats() {
 // Lista de chats
 // ------------------------------------------------------------------
 
+function scope() {
+  const days = Number(document.querySelector('input[name="activity"]:checked').value) || 0;
+  return { includeGroups: $('includeGroups').checked, activityDays: days };
+}
+
+/** Filtros que definen que chats entran en la exportacion. */
+function inScope(c, sc) {
+  if (!sc.includeGroups && c.kind === 'group') return false;
+  if (sc.activityDays && c.t < Date.now() / 1000 - sc.activityDays * 86400) return false;
+  return true;
+}
+
+const selectedInPool = () => ui.pool.filter((c) => ui.selected.has(c.id));
+
 function matchesFilter(c) {
   if (ui.filter === 'individual' && c.kind !== 'individual') return false;
   if (ui.filter === 'group' && c.kind !== 'group') return false;
@@ -186,20 +200,28 @@ function matchesFilter(c) {
 }
 
 function updateChipCounts() {
-  const counts = { all: ui.chats.length, individual: 0, group: 0, archived: 0 };
-  for (const c of ui.chats) {
+  const counts = { all: ui.pool.length, individual: 0, group: 0, archived: 0 };
+  for (const c of ui.pool) {
     if (c.kind === 'individual') counts.individual++;
     if (c.kind === 'group') counts.group++;
     if (c.archived) counts.archived++;
   }
   for (const chip of $('chips').children) chip.querySelector('span').textContent = fmtNum(counts[chip.dataset.filter]);
+  $('chips').querySelector('[data-filter="group"]').hidden = !scope().includeGroups;
 }
 
 function applyFilter() {
-  ui.visible = ui.chats.filter(matchesFilter);
+  const sc = scope();
+  if (!sc.includeGroups && ui.filter === 'group') setChip('all');
+  ui.pool = ui.chats.filter((c) => inScope(c, sc));
+  ui.visible = ui.pool.filter(matchesFilter);
   ui.rendered = 0;
   $('list').textContent = '';
   $('list-empty').hidden = ui.visible.length > 0;
+  $('list-empty').textContent = ui.pool.length
+    ? 'No hay chats que coincidan.'
+    : 'Ningún chat cumple los filtros de fecha del último mensaje y grupos.';
+  updateChipCounts();
   renderMore();
   updateSelectAll();
 }
@@ -306,7 +328,7 @@ function updateSelectAll() {
   box.indeterminate = sel > 0 && sel < vis.length;
   const filtered = ui.filter !== 'all' || ui.query;
   $('select-all-label').textContent = filtered ? `Seleccionar visibles (${fmtNum(vis.length)})` : 'Seleccionar todos';
-  $('sel-count').textContent = `${fmtNum(ui.selected.size)} de ${fmtNum(ui.chats.length)}`;
+  $('sel-count').textContent = `${fmtNum(selectedInPool().length)} de ${fmtNum(ui.pool.length)}`;
   updateCta();
 }
 
@@ -335,9 +357,23 @@ $('search').addEventListener('input', (e) => {
 $('chips').addEventListener('click', (e) => {
   const chip = e.target.closest('.chip');
   if (!chip) return;
-  for (const c of $('chips').children) c.classList.toggle('active', c === chip);
-  ui.filter = chip.dataset.filter;
+  setChip(chip.dataset.filter);
   applyFilter();
+});
+
+function setChip(filter) {
+  ui.filter = filter;
+  for (const c of $('chips').children) c.classList.toggle('active', c.dataset.filter === filter);
+}
+
+// Filtros de alcance: cambian la lista y se guardan con las demas opciones.
+$('activity').addEventListener('change', () => {
+  applyFilter();
+  onOptionsChanged();
+});
+$('includeGroups').addEventListener('change', () => {
+  applyFilter();
+  onOptionsChanged();
 });
 
 $('refresh').addEventListener('click', loadChats);
@@ -359,6 +395,7 @@ function readOptions() {
     maxPerChat: parseInt($('maxPerChat').value, 10) || 0,
     includeSystem: $('includeSystem').checked,
     quick: $('quick').checked,
+    ...scope(),
   };
 }
 
@@ -377,13 +414,17 @@ function writeOptions(o) {
   if (o.maxPerChat) $('maxPerChat').value = o.maxPerChat;
   $('includeSystem').checked = !!o.includeSystem;
   $('quick').checked = !!o.quick;
+  if (typeof o.includeGroups === 'boolean') $('includeGroups').checked = o.includeGroups;
+  if (o.activityDays !== undefined) set('activity', o.activityDays);
 }
 
 function toExportOptions(o) {
   const speed = SPEEDS[o.speed] || SPEEDS.normal;
   return {
     formats: o.formats,
-    chatIds: ui.chats.filter((c) => ui.selected.has(c.id)).map((c) => c.id),
+    chatIds: selectedInPool().map((c) => c.id),
+    includeGroups: o.includeGroups,
+    activityDays: o.activityDays,
     loadFullHistory: !o.quick,
     since: o.period === 'since' ? o.since : null,
     onlyNew: o.period === 'new',
@@ -434,10 +475,11 @@ $('since').addEventListener('change', () => {
 function updateCta() {
   if (ui.view !== 'select') return;
   const btn = $('primary');
-  const n = ui.selected.size;
+  const n = selectedInPool().length;
   const o = readOptions();
   let problem = '';
-  if (!n) problem = 'Selecciona al menos un chat';
+  if (!ui.pool.length) problem = 'Ningún chat cumple los filtros';
+  else if (!n) problem = 'Selecciona al menos un chat';
   else if (!o.formats.length) problem = 'Elige al menos un formato';
   else if (o.period === 'since' && !o.since) problem = 'Elige la fecha de inicio';
   btn.disabled = !!problem;
