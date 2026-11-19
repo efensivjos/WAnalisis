@@ -68,9 +68,10 @@ const csp = manifest.content_security_policy?.extension_pages || '';
 for (const d of ["default-src 'none'", "connect-src 'none'", "script-src 'self'"]) {
   if (!csp.includes(d)) problems.push(`manifest: la CSP debe incluir ${d}`);
 }
-if (!manifest.externally_connectable || (manifest.externally_connectable.ids || []).length || manifest.externally_connectable.matches) {
-  problems.push('manifest: externally_connectable debe bloquear otras extensiones y sitios');
-}
+// Sin externally_connectable, los sitios web no pueden enviar mensajes a la extension, y otras
+// extensiones solo podrian hacerlo si existieran listeners externos (prohibidos arriba).
+// Declararlo vacio no agrega proteccion y Chrome lo marca como aviso.
+if (manifest.externally_connectable) problems.push('manifest: no debe declarar externally_connectable');
 for (const cs of manifest.content_scripts || []) {
   if (!eq(cs.matches, ['https://web.whatsapp.com/*'])) problems.push(`manifest: content script fuera de WhatsApp Web ${JSON.stringify(cs.matches)}`);
 }

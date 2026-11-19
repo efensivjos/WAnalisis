@@ -75,8 +75,8 @@ En `chrome://extensions`, presiona **Quitar** en la tarjeta de WAnalisis. Esto b
 
 `npm run package` imprime la huella SHA-256 del ZIP, y el resultado es reproducible: el mismo código siempre da la misma huella. Quien reciba el archivo puede compararla para confirmar que no fue modificado:
 
-- Windows: `certutil -hashfile wanalisis-extension-v2.3.0.zip SHA256`
-- Mac o Linux: `shasum -a 256 wanalisis-extension-v2.3.0.zip`
+- Windows: `certutil -hashfile wanalisis-extension-v2.3.1.zip SHA256`
+- Mac o Linux: `shasum -a 256 wanalisis-extension-v2.3.1.zip`
 
 ## Uso
 
@@ -163,14 +163,14 @@ Todo el proceso ocurre en la computadora de quien instala la extensión. No hay 
 | Sin red | El código no contiene `fetch`, `XMLHttpRequest`, `WebSocket` ni ninguna otra vía de envío. Además, las páginas de la extensión tienen una política de seguridad (CSP) con `connect-src 'none'`: aunque alguien agregara código de red, Chrome lo bloquearía. |
 | Sin código externo | No usa librerías, CDNs ni fuentes web. Manifest V3 prohíbe ejecutar código descargado de internet. |
 | Permisos mínimos | `storage` (guardar tus opciones), `sidePanel` (el panel) y acceso solo a `web.whatsapp.com`. No pide acceso a otros sitios, pestañas, historial ni descargas. |
-| Aislada | Bloquea mensajes de otras extensiones y de sitios web (`externally_connectable`) y no expone archivos a páginas web. |
+| Aislada | No escucha mensajes de otras extensiones ni de sitios web: cualquier intento recibe "Could not establish connection". Tampoco expone archivos a páginas web. |
 | Sin rastros en WhatsApp | El registro de la última exportación (ids de chat y fechas) vive en `chrome.storage.local` de la extensión, que es local y no se sincroniza. No escribe nada en el almacenamiento de WhatsApp Web ni en la consola, cuyos mensajes WhatsApp Web podría incluir en sus reportes de errores. |
 | El ZIP no sale de tu equipo | Se arma en memoria y se guarda con la descarga normal de Chrome. |
 
 ### Cómo verificarlo
 
 1. `npm run audit:privacy` revisa el código y el manifest. Falla si encuentra cualquier mecanismo de envío, URLs externas o permisos de más.
-2. `npm test` ejecuta la exportación completa con un monitor que registra toda solicitud de red. Falla si hay alguna.
+2. `npm test` además carga la extensión en Chrome y falla si `chrome://extensions` muestra cualquier aviso del manifest, y ejecuta la exportación completa con un monitor que registra toda solicitud de red. Falla si hay alguna.
 3. A mano: en WhatsApp Web abre DevTools (F12), pestaña **Network**, y exporta. La extensión no genera solicitudes. El único tráfico es el normal de WhatsApp Web al cargar mensajes antiguos, igual que cuando haces scroll hacia arriba en un chat.
 
 ### Riesgos que dependen de tu entorno
