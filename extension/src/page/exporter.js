@@ -17,7 +17,9 @@
 
   const SRC_EXT = 'wa-export-ext';
   const SRC_PAGE = 'wa-export-page';
-  const LAST_RUN_KEY = 'wa-export:last-run';
+  // Clave usada por versiones anteriores en el almacenamiento de WhatsApp Web.
+  // Ya no se escribe: el registro vive en chrome.storage.local de la extension.
+  const LEGACY_LAST_RUN_KEY = 'wa-export:last-run';
 
   const MODULES = {
     collections: 'WAWebCollections',
@@ -839,18 +841,23 @@
   // Exportación
   // ------------------------------------------------------------------
 
-  function readLastRun() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(LAST_RUN_KEY) || '{}') || {};
-      return raw.chats ? raw : { at: 0, chats: raw }; // formato v1: mapa plano
-    } catch {
-      return { at: 0, chats: {} };
-    }
+  function normalizeLastRun(raw) {
+    if (!raw || typeof raw !== 'object') return { at: 0, chats: {} };
+    return raw.chats && typeof raw.chats === 'object' ? { at: raw.at || 0, chats: raw.chats } : { at: 0, chats: raw };
   }
 
-  function writeLastRun(data) {
+  /** Envia el registro de la ultima exportacion al puente, que lo guarda en la extension. */
+  function saveLastRun(data) {
+    window.postMessage({ source: SRC_PAGE, type: 'lastRun', data }, location.origin);
+  }
+
+  /** Migra y borra el registro que versiones anteriores dejaban en el localStorage de WhatsApp Web. */
+  function migrateLegacyLastRun() {
     try {
-      localStorage.setItem(LAST_RUN_KEY, JSON.stringify(data));
+      const raw = localStorage.getItem(LEGACY_LAST_RUN_KEY);
+      if (raw === null) return;
+      localStorage.removeItem(LEGACY_LAST_RUN_KEY);
+      saveLastRun(normalizeLastRun(JSON.parse(raw)));
     } catch {
       /* ignorar */
     }
@@ -900,7 +907,6 @@
     const wa = getWA();
     if (!wa || !wa.Chat.getModelsArray().length) return { ready: false };
     const nameOf = makeNameResolver(wa);
-    const last = readLastRun();
     const chats = selectChats(wa, nameOf, { ...DEFAULT_OPTIONS, chatIds: null }).map((chat) => {
       const id = wid(chat.id);
       let unread = 0;
@@ -909,7 +915,6 @@
       } catch {
         /* opcional */
       }
-      const lastT = last.chats[id] || 0;
       return {
         id,
         name: chatName(chat, nameOf),
@@ -918,10 +923,9 @@
         pinned: !!chat.pin,
         t: chat.t || 0,
         unread,
-        hasNew: lastT ? (chat.t || 0) > lastT : null,
       };
     });
-    return { ready: true, account: getMeJid(wa), lastExportAt: last.at || 0, chats };
+    return { ready: true, account: getMeJid(wa), chats };
   }
 
   async function runExport(userOptions) {
@@ -949,7 +953,7 @@
       cancelRequested: false,
     });
     emit(true);
-    exportLoop(opts, formats); // corre en segundo plano
+    exportLoop(opts, formats).catch(() => {}); // corre en segundo plano
     return { ok: true };
   }
 
@@ -957,7 +961,8 @@
     const zip = new ZipWriter();
     const combined = formats.has('csv') ? new DeflateSink() : null;
     const exportedAt = isoLocal(Date.now() / 1000);
-    const last = readLastRun();
+    const last = normalizeLastRun(opts.lastRun);
+    delete opts.lastRun; // no se copia al index.json
     const newLast = { at: Math.floor(Date.now() / 1000), chats: { ...last.chats } };
     const index = [];
     let meJid = '';
@@ -1105,7 +1110,7 @@
       const fileName = `whatsapp-export-${stamp()}${run.cancelRequested ? '-parcial' : ''}.zip`;
       const blob = zip.finish();
       download(blob, fileName);
-      if (!run.cancelRequested) writeLastRun(newLast);
+      if (!run.cancelRequested) saveLastRun(newLast);
       Object.assign(run, {
         status: run.cancelRequested ? 'cancelled' : 'done',
         error: run.cancelRequested ? 'Cancelada por el usuario.' : '',
@@ -1116,7 +1121,6 @@
     } catch (e) {
       run.status = 'error';
       run.error = e.message || String(e);
-      console.error('[WAnalisis]', e);
       const partial = index.filter(Boolean);
       if (partial.length) {
         try {
@@ -1175,7 +1179,10 @@
   // ------------------------------------------------------------------
 
   const RPC = {
-    status: () => ({ ready: isReady(), state: publicState() }),
+    status: () => {
+      migrateLegacyLastRun();
+      return { ready: isReady(), state: publicState() };
+    },
     listChats: () => listChats(),
     start: (params) => runExport(params?.options),
     cancel: () => {

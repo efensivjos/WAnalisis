@@ -6,7 +6,20 @@
 (() => {
   const SRC_EXT = 'wa-export-ext';
   const SRC_PAGE = 'wa-export-page';
+  const LAST_RUN_KEY = 'wa-export-last-run';
   const pending = new Map();
+
+  // Registro de la ultima exportacion (id de chat -> ultimo timestamp exportado).
+  // Se guarda solo en chrome.storage.local: privado de la extension, local y sin sincronizar.
+  async function saveLastRun(data) {
+    if (!data || typeof data !== 'object' || !data.chats) return;
+    const stored = (await chrome.storage.local.get(LAST_RUN_KEY))[LAST_RUN_KEY] || { at: 0, chats: {} };
+    const chats = { ...stored.chats };
+    for (const [id, t] of Object.entries(data.chats)) {
+      if (typeof t === 'number') chats[id] = Math.max(chats[id] || 0, t);
+    }
+    await chrome.storage.local.set({ [LAST_RUN_KEY]: { at: Math.max(stored.at || 0, data.at || 0), chats } });
+  }
   let seq = 0;
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -33,6 +46,8 @@
       }
     } else if (e.data.type === 'state') {
       chrome.runtime.sendMessage({ target: 'wa-export-panel', state: e.data.state }).catch(() => {});
+    } else if (e.data.type === 'lastRun') {
+      saveLastRun(e.data.data);
     }
   });
 })();

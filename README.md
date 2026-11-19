@@ -5,7 +5,7 @@ Extensión de Chrome que exporta tus chats de WhatsApp Web, con historial comple
 - **Panel lateral** que queda abierto junto a WhatsApp Web: eliges chats, opciones y ves el progreso en vivo.
 - **Masivo y rápido:** procesa varios chats en paralelo y escala de forma lineal con el tamaño del historial.
 - **Incremental:** en las siguientes corridas exporta solo lo nuevo y salta los chats sin cambios.
-- **Privado:** todo ocurre en tu navegador. No hay servidores ni envío de datos a terceros.
+- **100 % local:** sin servidores, sin analítica y sin conexiones de red. Chrome bloquea por política cualquier intento de conexión desde la extensión. Ver [Privacidad y seguridad](#privacidad-y-seguridad).
 
 ## Instalación (modo desarrollador)
 
@@ -85,6 +85,37 @@ Los campos opcionales (`quoted_*`, `media`, `location`, `forwarded`, `starred`, 
 
 Columnas del CSV: `chat_id, chat_name, chat_type, message_id, datetime, timestamp, sender_name, sender_id, from_me, type, text, quoted_sender, quoted_text, forwarded, starred, media_mimetype, media_filename, latitude, longitude`.
 
+## Privacidad y seguridad
+
+Todo el proceso ocurre en la computadora de quien instala la extensión. No hay servidor, cuenta, analítica ni telemetría, y la extensión no hace ninguna conexión de red.
+
+### Qué garantiza la extensión
+
+| Medida | Detalle |
+| --- | --- |
+| Sin red | El código no contiene `fetch`, `XMLHttpRequest`, `WebSocket` ni ninguna otra vía de envío. Además, las páginas de la extensión tienen una política de seguridad (CSP) con `connect-src 'none'`: aunque alguien agregara código de red, Chrome lo bloquearía. |
+| Sin código externo | No usa librerías, CDNs ni fuentes web. Manifest V3 prohíbe ejecutar código descargado de internet. |
+| Permisos mínimos | `storage` (guardar tus opciones), `sidePanel` (el panel) y acceso solo a `web.whatsapp.com`. No pide acceso a otros sitios, pestañas, historial ni descargas. |
+| Aislada | Bloquea mensajes de otras extensiones y de sitios web (`externally_connectable`) y no expone archivos a páginas web. |
+| Sin rastros en WhatsApp | El registro de la última exportación (ids de chat y fechas) vive en `chrome.storage.local` de la extensión, que es local y no se sincroniza. No escribe nada en el almacenamiento de WhatsApp Web ni en la consola, cuyos mensajes WhatsApp Web podría incluir en sus reportes de errores. |
+| El ZIP no sale de tu equipo | Se arma en memoria y se guarda con la descarga normal de Chrome. |
+
+### Cómo verificarlo
+
+1. `npm run audit:privacy` revisa el código y el manifest. Falla si encuentra cualquier mecanismo de envío, URLs externas o permisos de más.
+2. `npm test` ejecuta la exportación completa con un monitor que registra toda solicitud de red. Falla si hay alguna.
+3. A mano: en WhatsApp Web abre DevTools (F12), pestaña **Network**, y exporta. La extensión no genera solicitudes. El único tráfico es el normal de WhatsApp Web al cargar mensajes antiguos, igual que cuando haces scroll hacia arriba en un chat.
+
+### Riesgos que dependen de tu entorno
+
+La extensión no puede controlar estos puntos; conviene revisarlos:
+
+- **Otras extensiones:** cualquier extensión con acceso a `web.whatsapp.com` puede leer tus chats directamente, con o sin esta herramienta. Para exportar, usa un perfil de Chrome dedicado que solo tenga esta extensión.
+- **Carpeta de Descargas en la nube:** si tu carpeta de Descargas se respalda en OneDrive, iCloud, Google Drive o Dropbox, el ZIP se subirá ahí. Activa "Preguntar dónde se guardará cada archivo" en `chrome://settings/downloads` y guárdalo en una carpeta no sincronizada o cifrada. Borra el ZIP cuando ya no lo necesites.
+- **Análisis de descargas de Chrome:** Chrome revisa las descargas en busca de malware. Con la Protección mejorada de Navegación segura puede pedirte permiso para enviar un archivo a Google para un análisis profundo; rechaza esa opción para este ZIP. En equipos administrados por una empresa, sus políticas también pueden inspeccionar descargas.
+- **Instalación:** instala desde una copia del código que hayas revisado. Una extensión cargada desde una carpeta no se actualiza sola, así que nadie puede cambiar su código sin que tú lo vuelvas a cargar.
+- **Uso con Claude:** subir los archivos a Claude es compartirlos con Anthropic. Sube solo lo que quieras analizar.
+
 ## Uso con Claude
 
 - **Leer y resumir conversaciones:** sube los `.txt` de los chats que te interesen.
@@ -118,7 +149,7 @@ Detalles de eficiencia:
 
 ## Pruebas
 
-La prueba end-to-end carga la extensión real en Chromium, simula WhatsApp Web interceptando `https://web.whatsapp.com/`, maneja el panel lateral como lo haría una persona y valida cada ZIP: conteos (incluye un chat de 20 000 mensajes), orden, ausencia de duplicados, formato TXT, CSV con comas y saltos de línea, ids con formato nuevo `$1`, firma antigua de `loadEarlierMsgs`, modo incremental, selección manual, cancelación con descarga parcial y persistencia de opciones.
+La prueba end-to-end carga la extensión real en Chromium, simula WhatsApp Web interceptando `https://web.whatsapp.com/`, maneja el panel lateral como lo haría una persona y valida cada ZIP: conteos (incluye un chat de 20 000 mensajes), orden, ausencia de duplicados, formato TXT, CSV con comas y saltos de línea, ids con formato nuevo `$1`, firma antigua de `loadEarlierMsgs`, modo incremental, selección manual, cancelación con descarga parcial y persistencia de opciones. Durante todo el flujo registra cada solicitud de red y falla si aparece alguna, y verifica que no quede ningún rastro en el almacenamiento de WhatsApp Web. Antes corre la auditoría estática de privacidad.
 
 ```bash
 npm install

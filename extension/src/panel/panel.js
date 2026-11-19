@@ -2,6 +2,7 @@
 
 const WA_URL = 'https://web.whatsapp.com/';
 const STORAGE_KEY = 'wa-export-options-v2';
+const LAST_RUN_KEY = 'wa-export-last-run';
 const PAGE_SIZE = 200;
 const SPEEDS = {
   careful: { concurrency: 1, delayMs: 400, hint: 'Un chat a la vez con pausas. Para cuentas muy grandes o conexiones lentas.' },
@@ -24,6 +25,7 @@ const ui = {
   visible: [],
   rendered: 0,
   lastExportAt: 0,
+  lastRun: { at: 0, chats: {} },
   view: '',
   state: null,
   ticker: null,
@@ -142,8 +144,12 @@ async function loadChats() {
       return;
     }
     const firstLoad = ui.known.size === 0;
-    ui.chats = res.chats;
-    ui.lastExportAt = res.lastExportAt || 0;
+    ui.lastRun = (await chrome.storage.local.get(LAST_RUN_KEY))[LAST_RUN_KEY] || { at: 0, chats: {} };
+    ui.lastExportAt = ui.lastRun.at || 0;
+    ui.chats = res.chats.map((c) => {
+      const lastT = ui.lastRun.chats[c.id] || 0;
+      return { ...c, hasNew: lastT ? c.t > lastT : false };
+    });
     for (const c of ui.chats) {
       if (!ui.known.has(c.id)) {
         ui.known.add(c.id);
@@ -384,6 +390,7 @@ function toExportOptions(o) {
     maxPerChat: o.maxPerChat,
     includeSystem: o.includeSystem,
     meName: o.meName,
+    lastRun: o.period === 'new' ? ui.lastRun : null,
     concurrency: speed.concurrency,
     delayMs: speed.delayMs,
   };
@@ -581,7 +588,8 @@ function renderDone(s) {
 
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (!msg || msg.target !== 'wa-export-panel') return;
-  if (ui.tab && sender.tab && sender.tab.id !== ui.tab.id) return;
+  if (!sender.tab || !(sender.tab.url || '').startsWith(WA_URL)) return; // solo la pestana de WhatsApp Web
+  if (ui.tab && sender.tab.id !== ui.tab.id) return;
   const s = msg.state;
   if (s.status === 'running') renderProgress(s);
   else if (ui.view === 'progress' && ['done', 'cancelled', 'error'].includes(s.status)) renderDone(s);

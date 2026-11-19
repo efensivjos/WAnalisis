@@ -110,6 +110,19 @@ const context = await chromium.launchPersistentContext(userDataDir, {
 
 let failed = false;
 try {
+  // Monitoreo de red: cualquier solicitud que no sea la carga de la pagina simulada
+  // o un recurso local de la extension cuenta como fuga.
+  const leaks = [];
+  context.on('request', (r) => {
+    const u = r.url();
+    if (u.startsWith('chrome-extension://') || u.startsWith('blob:') || u.startsWith('data:')) return;
+    if (u.startsWith('https://web.whatsapp.com/') && r.resourceType() === 'document') return;
+    leaks.push(`${r.resourceType()} ${u}`);
+  });
+  await context.route(/^(?!https:\/\/web\.whatsapp\.com\/)https?:/, (route) => {
+    leaks.push(`bloqueada ${route.request().url()}`);
+    route.abort();
+  });
   await context.route('https://web.whatsapp.com/**', (route) =>
     route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: mockHtml })
   );
@@ -284,12 +297,24 @@ try {
   await panel.waitForSelector('#view-done:not([hidden])');
   assert.equal(await panel.textContent('#d-title'), 'Exportación cancelada');
 
-  // ---------- Las opciones se recuerdan ----------
+  // ---------- Sin rastros en el almacenamiento de WhatsApp Web ----------
+  assert.deepEqual(await wa.evaluate(() => Object.keys(localStorage).filter((k) => k.includes('wa-export'))), []);
+  await wa.evaluate(() => localStorage.setItem('wa-export:last-run', JSON.stringify({ '5215599999999@c.us': 123 })));
+
+  // ---------- Las opciones se recuerdan; el registro antiguo se migra ----------
   await panel.close();
   panel = await openPanel(context, extId);
   assert.equal(await panel.locator('input[name="fmt"][value="csv"]').isChecked(), false);
   assert.equal(await panel.locator('input[name="speed"][value="careful"]').isChecked(), true);
+  await panel.waitForFunction(async () => {
+    const r = (await chrome.storage.local.get('wa-export-last-run'))['wa-export-last-run'];
+    return r && r.chats['5215599999999@c.us'] === 123 && r.chats['5215511111111@c.us'] > 0;
+  });
+  assert.equal(await wa.evaluate(() => localStorage.getItem('wa-export:last-run')), null, 'registro antiguo borrado');
   await panel.close();
+
+  // ---------- Ninguna conexion de red durante todo el flujo ----------
+  assert.deepEqual(leaks, [], 'sin solicitudes de red fuera del navegador');
 
   console.log('OK: todas las pruebas pasaron');
 } catch (e) {
