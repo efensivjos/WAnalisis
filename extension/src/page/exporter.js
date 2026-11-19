@@ -700,42 +700,46 @@
 
   const OVERLAY_CSS = `
     :host { all: initial; }
-    .card { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647; width: 300px;
-      background: #ffffff; color: #111b21; border-radius: 14px; padding: 14px 16px 12px;
-      font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      box-shadow: 0 10px 30px rgba(11, 20, 26, .22), 0 0 0 1px rgba(11, 20, 26, .06); }
+    .card, .pill { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647;
+      font: 13px/1.38 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+      letter-spacing: -.006em; -webkit-font-smoothing: antialiased; color: #000;
+      background: rgba(255, 255, 255, .78);
+      -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, .16), 0 0 0 .5px rgba(0, 0, 0, .12); }
+    .card { width: 300px; border-radius: 16px; padding: 14px 16px 14px; }
     .row { display: flex; align-items: center; gap: 8px; }
-    .title { font-weight: 600; font-size: 14px; flex: 1; }
-    .icon-btn { background: none; border: 0; color: #667781; cursor: pointer; font-size: 16px;
-      width: 26px; height: 26px; border-radius: 6px; line-height: 1; }
-    .icon-btn:hover { background: #f0f2f5; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #00a884; flex: none; }
-    .running .dot { animation: pulse 1.2s ease-in-out infinite; }
-    .error .dot, .cancelled .dot { background: #ea0038; animation: none; }
+    .title { font-weight: 600; flex: 1; }
+    .icon-btn { width: 22px; height: 22px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center;
+      background: rgba(120, 120, 128, .16); color: rgba(60, 60, 67, .7); font: 600 13px/1 system-ui, sans-serif; padding: 0; }
+    .icon-btn:hover { background: rgba(120, 120, 128, .26); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #34c759; flex: none; }
+    .running .dot { background: #007aff; animation: pulse 1.4s ease-in-out infinite; }
+    .error .dot, .cancelled .dot { background: #ff9500; animation: none; }
     @keyframes pulse { 50% { opacity: .3; } }
-    .track { height: 6px; background: #e9edef; border-radius: 3px; overflow: hidden; margin: 10px 0 8px; }
-    .fill { height: 100%; width: 0; background: #00a884; border-radius: 3px; transition: width .3s ease; }
+    .track { height: 4px; background: rgba(120, 120, 128, .2); border-radius: 2px; overflow: hidden; margin: 12px 0 10px; }
+    .fill { height: 100%; width: 0; background: #007aff; border-radius: 2px; transition: width .4s cubic-bezier(.3, .7, .4, 1); }
+    .done .fill { background: #34c759; }
     .main { font-variant-numeric: tabular-nums; }
-    .sub { color: #667781; font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .actions { margin-top: 10px; display: flex; justify-content: flex-end; }
-    .btn { font: inherit; font-size: 12px; border: 1px solid #d1d7db; background: #fff; color: #111b21;
-      border-radius: 18px; padding: 5px 12px; cursor: pointer; }
-    .btn:hover { background: #f5f6f6; }
-    .pill { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647; display: none; align-items: center;
-      gap: 8px; background: #ffffff; color: #111b21; border-radius: 20px; padding: 8px 14px; cursor: pointer;
-      font: 600 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-variant-numeric: tabular-nums;
-      box-shadow: 0 6px 20px rgba(11, 20, 26, .2), 0 0 0 1px rgba(11, 20, 26, .06); }
+    .sub { color: rgba(60, 60, 67, .6); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .actions { margin-top: 12px; display: flex; }
+    .btn { flex: 1; font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 7px 12px; cursor: pointer;
+      background: rgba(120, 120, 128, .14); color: #ff3b30; }
+    .btn:hover { background: rgba(120, 120, 128, .22); }
+    .pill { display: none; align-items: center; gap: 8px; border-radius: 20px; padding: 8px 14px; cursor: pointer;
+      font-weight: 600; font-size: 12px; font-variant-numeric: tabular-nums; }
     .min .card { display: none; }
     .min .pill { display: flex; }
     .hidden { display: none !important; }
     @media (prefers-color-scheme: dark) {
-      .card, .pill { background: #233138; color: #e9edef; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
-      .icon-btn:hover { background: #2a3942; }
-      .track { background: #374045; }
-      .sub, .icon-btn { color: #8696a0; }
-      .btn { background: #233138; color: #e9edef; border-color: #3b4a54; }
-      .btn:hover { background: #2a3942; }
-    }`;
+      .card, .pill { color: #fff; background: rgba(30, 30, 32, .74); box-shadow: 0 12px 40px rgba(0, 0, 0, .5), 0 0 0 .5px rgba(255, 255, 255, .12); }
+      .icon-btn { background: rgba(120, 120, 128, .32); color: rgba(235, 235, 245, .7); }
+      .track { background: rgba(120, 120, 128, .36); }
+      .running .dot, .fill { background: #0a84ff; }
+      .done .fill, .dot { background: #30d158; }
+      .sub { color: rgba(235, 235, 245, .6); }
+      .btn { background: rgba(120, 120, 128, .28); color: #ff453a; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }`;
 
   const overlay = (() => {
     let host = null;
@@ -767,7 +771,7 @@
       const head = el('div', 'row');
       const dot = el('span', 'dot');
       const title = el('span', 'title', 'Exportando chats');
-      const min = el('button', 'icon-btn', '–');
+      const min = el('button', 'icon-btn', '−');
       min.title = 'Minimizar';
       min.addEventListener('click', () => wrap.classList.add('min'));
       const close = el('button', 'icon-btn', '×');
@@ -816,10 +820,10 @@
 
       if (s.status === 'running') {
         els.title.textContent = 'Exportando chats';
-        els.main.textContent = s.total ? `${s.done} de ${s.total} chats · ${msgs} mensajes` : s.phase;
+        els.main.textContent = s.total ? `${s.done} de ${s.total} chats, ${msgs} mensajes` : s.phase;
         const act = s.active[0];
-        els.sub.textContent = act ? `${act.name} · ${act.count.toLocaleString('es')} mensajes` : s.phase;
-        els.pillText.textContent = `${pct}% · ${msgs} mensajes`;
+        els.sub.textContent = act ? `${act.name}: ${act.count.toLocaleString('es')} mensajes cargados` : s.phase;
+        els.pillText.textContent = `${pct}%, ${msgs} mensajes`;
       } else if (s.status === 'done') {
         els.title.textContent = 'Exportación lista';
         els.main.textContent = `${msgs} mensajes de ${s.total} chats`;

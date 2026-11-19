@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "WAnalisis: exportar chats de WhatsApp Web",
   "short_name": "WAnalisis",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Exporta masivamente tus chats de WhatsApp Web a JSON, CSV y TXT en un solo ZIP, listo para analizar con Claude.",
   "minimum_chrome_version": "116",
   "permissions": [

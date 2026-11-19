@@ -9,8 +9,7 @@ const SPEEDS = {
   normal: { concurrency: 2, delayMs: 150, hint: 'Dos chats en paralelo. Recomendado.' },
   fast: { concurrency: 4, delayMs: 0, hint: 'Cuatro chats en paralelo sin pausas. Más rápido, más carga para el teléfono.' },
 };
-const KIND_TAG = { individual: '', group: 'Grupo' };
-const AVATAR_COLORS = ['#00a884', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#ef4444', '#14b8a6', '#6366f1', '#84cc16', '#0ea5e9'];
+const SPEED_LABEL = { careful: 'cuidadosa', normal: 'normal', fast: 'rápida' };
 
 const $ = (id) => document.getElementById(id);
 const fmtNum = (n) => Number(n || 0).toLocaleString('es');
@@ -59,7 +58,11 @@ function show(view) {
   ui.view = view;
   for (const v of ['connect', 'select', 'progress', 'done']) $(`view-${v}`).hidden = v !== view;
   $('refresh').hidden = view !== 'select';
+  $('open-options').hidden = view !== 'select';
   $('footer').hidden = view === 'connect';
+  $('options-summary').hidden = view !== 'select';
+  $(`view-${view}`).scrollTop = 0;
+  $('navbar').classList.remove('scrolled');
   const primary = $('primary');
   const secondary = $('secondary');
   secondary.hidden = true;
@@ -69,7 +72,6 @@ function show(view) {
     primary.hidden = true;
     secondary.hidden = false;
     secondary.textContent = 'Cancelar exportación';
-    secondary.classList.add('block');
   }
   if (view === 'done') {
     primary.textContent = 'Nueva exportación';
@@ -144,7 +146,6 @@ async function loadChats() {
       ui.retryTimer = setTimeout(connect, 2000);
       return;
     }
-    const firstLoad = ui.known.size === 0;
     ui.lastRun = (await chrome.storage.local.get(LAST_RUN_KEY))[LAST_RUN_KEY] || { at: 0, chats: {} };
     ui.lastExportAt = ui.lastRun.at || 0;
     ui.chats = res.chats.map((c) => {
@@ -161,11 +162,10 @@ async function loadChats() {
     for (const id of [...ui.selected]) if (!ids.has(id)) ui.selected.delete(id);
 
     const acct = res.account ? `+${res.account.split('@')[0]}` : '';
-    setConn('ok', acct ? `Conectado · ${acct}` : 'Conectado');
+    setConn('ok', acct ? `Conectado: ${acct}` : 'Conectado');
     updateLastExport();
     applyFilter();
     show('select');
-    if (firstLoad) $('search').focus();
   } catch (e) {
     setConn('bad', 'Error de conexión');
     showConnect('No se pudo leer la lista de chats', e.message, { label: 'Reintentar', run: connect });
@@ -199,20 +199,13 @@ function matchesFilter(c) {
   return !ui.query || c.name.toLowerCase().includes(ui.query);
 }
 
-function updateChipCounts() {
-  const counts = { all: ui.pool.length, individual: 0, group: 0, archived: 0 };
-  for (const c of ui.pool) {
-    if (c.kind === 'individual') counts.individual++;
-    if (c.kind === 'group') counts.group++;
-    if (c.archived) counts.archived++;
-  }
-  for (const chip of $('chips').children) chip.querySelector('span').textContent = fmtNum(counts[chip.dataset.filter]);
-  $('chips').querySelector('[data-filter="group"]').hidden = !scope().includeGroups;
+function updateScopeControl() {
+  $('scope').querySelector('[data-kind="group"]').hidden = !scope().includeGroups;
 }
 
 function applyFilter() {
   const sc = scope();
-  if (!sc.includeGroups && ui.filter === 'group') setChip('all');
+  if (!sc.includeGroups && ui.filter === 'group') setKind('all');
   ui.pool = ui.chats.filter((c) => inScope(c, sc));
   ui.visible = ui.pool.filter(matchesFilter);
   ui.rendered = 0;
@@ -221,7 +214,7 @@ function applyFilter() {
   $('list-empty').textContent = ui.pool.length
     ? 'No hay chats que coincidan.'
     : 'Ningún chat cumple los filtros de fecha del último mensaje y grupos.';
-  updateChipCounts();
+  updateScopeControl();
   renderMore();
   updateSelectAll();
 }
@@ -246,11 +239,6 @@ function renderMore() {
   }
 }
 
-function colorFor(id) {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return AVATAR_COLORS[h % AVATAR_COLORS.length];
-}
 
 function initials(name) {
   const clean = name.replace(/[^\p{L}\p{N}\s]/gu, ' ').trim();
@@ -259,16 +247,22 @@ function initials(name) {
   return (parts[0][0] + (parts.length > 1 ? parts[1][0] : '')).toUpperCase();
 }
 
-const rtf = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
-function relTime(t) {
+/** Fecha corta al estilo de Mensajes: hora si es hoy, "Ayer", dia de la semana o fecha. */
+function shortDate(t) {
   if (!t) return '';
-  const diff = t * 1000 - Date.now();
-  const abs = Math.abs(diff);
-  const units = [
-    ['year', 31536e6], ['month', 2592e6], ['week', 6048e5], ['day', 864e5], ['hour', 36e5], ['minute', 6e4],
-  ];
-  for (const [unit, ms] of units) if (abs >= ms) return rtf.format(Math.round(diff / ms), unit);
-  return 'ahora';
+  const d = new Date(t * 1000);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return 'Ayer';
+  if (now - d < 6 * 864e5) return d.toLocaleDateString('es', { weekday: 'long' });
+  return d.toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function kindLabel(c) {
+  const base = c.kind === 'group' ? 'Grupo' : 'Chat';
+  return c.archived ? `${base} archivado` : base;
 }
 
 function el(tag, cls, text) {
@@ -294,20 +288,20 @@ function rowFor(c) {
   const input = el('input');
   input.type = 'checkbox';
   input.checked = ui.selected.has(c.id);
-  const box = el('span', 'box');
-  box.append(svgIcon('i-check'));
+  input.setAttribute('aria-label', c.name);
+  const circle = el('span', 'select-circle');
+  circle.append(svgIcon('i-check'));
   const avatar = el('span', 'avatar', initials(c.name));
-  avatar.style.background = colorFor(c.id);
   const main = el('span', 'row-main');
-  main.append(el('div', 'row-name', c.name));
-  const meta = el('div', 'row-meta');
-  if (KIND_TAG[c.kind]) meta.append(el('span', 'tag', KIND_TAG[c.kind]));
-  if (c.archived) meta.append(el('span', 'tag', 'Archivado'));
-  meta.append(el('span', '', relTime(c.t)));
-  main.append(meta);
-  row.append(input, box, avatar, main);
-  if (c.hasNew) row.append(el('span', 'badge-new', 'Nuevo'));
-  row.classList.toggle('off', !input.checked);
+  const top = el('span', 'row-top');
+  if (c.hasNew) {
+    const dot = el('span', 'new-dot');
+    dot.title = 'Mensajes nuevos desde la última exportación';
+    top.append(dot);
+  }
+  top.append(el('span', 'row-name', c.name), el('span', 'row-date', shortDate(c.t)));
+  main.append(top, el('div', 'row-sub', kindLabel(c)));
+  row.append(input, circle, avatar, main);
   return row;
 }
 
@@ -316,32 +310,27 @@ $('list').addEventListener('change', (e) => {
   if (!row) return;
   if (e.target.checked) ui.selected.add(row.dataset.id);
   else ui.selected.delete(row.dataset.id);
-  row.classList.toggle('off', !e.target.checked);
   updateSelectAll();
 });
 
+const allVisibleSelected = () => ui.visible.length > 0 && ui.visible.every((c) => ui.selected.has(c.id));
+
 function updateSelectAll() {
-  const box = $('select-all');
-  const vis = ui.visible;
-  const sel = vis.reduce((n, c) => n + (ui.selected.has(c.id) ? 1 : 0), 0);
-  box.checked = vis.length > 0 && sel === vis.length;
-  box.indeterminate = sel > 0 && sel < vis.length;
-  const filtered = ui.filter !== 'all' || ui.query;
-  $('select-all-label').textContent = filtered ? `Seleccionar visibles (${fmtNum(vis.length)})` : 'Seleccionar todos';
-  $('sel-count').textContent = `${fmtNum(selectedInPool().length)} de ${fmtNum(ui.pool.length)}`;
+  const btn = $('select-all');
+  btn.hidden = !ui.visible.length;
+  btn.textContent = allVisibleSelected() ? 'Deseleccionar todo' : 'Seleccionar todo';
+  const n = selectedInPool().length;
+  $('sel-count').textContent = `${fmtNum(n)} de ${fmtNum(ui.pool.length)} ${ui.pool.length === 1 ? 'seleccionado' : 'seleccionados'}`;
   updateCta();
 }
 
-$('select-all').addEventListener('change', (e) => {
+$('select-all').addEventListener('click', () => {
+  const select = !allVisibleSelected();
   for (const c of ui.visible) {
-    if (e.target.checked) ui.selected.add(c.id);
+    if (select) ui.selected.add(c.id);
     else ui.selected.delete(c.id);
   }
-  for (const row of $('list').querySelectorAll('.row')) {
-    const input = row.querySelector('input');
-    input.checked = ui.selected.has(row.dataset.id);
-    row.classList.toggle('off', !input.checked);
-  }
+  for (const row of $('list').querySelectorAll('.row')) row.querySelector('input').checked = ui.selected.has(row.dataset.id);
   updateSelectAll();
 });
 
@@ -354,17 +343,52 @@ $('search').addEventListener('input', (e) => {
   }, 120);
 });
 
-$('chips').addEventListener('click', (e) => {
-  const chip = e.target.closest('.chip');
-  if (!chip) return;
-  setChip(chip.dataset.filter);
+$('scope').addEventListener('change', (e) => {
+  ui.filter = e.target.value;
   applyFilter();
 });
 
-function setChip(filter) {
-  ui.filter = filter;
-  for (const c of $('chips').children) c.classList.toggle('active', c.dataset.filter === filter);
+function setKind(kind) {
+  ui.filter = kind;
+  document.querySelector(`input[name="kind"][value="${kind}"]`).checked = true;
 }
+
+// Linea fina bajo la barra superior cuando el contenido se desplaza, como en iOS.
+for (const v of document.querySelectorAll('.view')) {
+  v.addEventListener('scroll', () => $('navbar').classList.toggle('scrolled', v.scrollTop > 4), { passive: true });
+}
+
+// ------------------------------------------------------------------
+// Hoja de opciones
+// ------------------------------------------------------------------
+
+function openSheet() {
+  const sheet = $('sheet');
+  sheet.hidden = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.add('open')));
+  $('sheet-done').focus();
+}
+
+function closeSheet() {
+  const sheet = $('sheet');
+  if (sheet.hidden) return;
+  sheet.classList.remove('open');
+  const done = () => {
+    sheet.hidden = true;
+    $('open-options').focus();
+  };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) done();
+  else setTimeout(done, 320);
+}
+
+$('open-options').addEventListener('click', openSheet);
+$('sheet-done').addEventListener('click', closeSheet);
+$('sheet').addEventListener('click', (e) => {
+  if (e.target === $('sheet')) closeSheet();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSheet();
+});
 
 // Filtros de alcance: cambian la lista y se guardan con las demas opciones.
 $('activity').addEventListener('change', () => {
@@ -453,10 +477,11 @@ function updateLastExport() {
 
 function onOptionsChanged() {
   const o = readOptions();
-  const fmt = o.formats.length ? o.formats.map((f) => f.toUpperCase()).join(', ') : 'sin formato';
-  const period = { all: 'Todo', since: o.since ? `Desde ${o.since}` : 'Desde fecha', new: 'Solo lo nuevo' }[o.period];
-  const speed = { careful: 'Cuidadosa', normal: 'Normal', fast: 'Rápida' }[o.speed];
-  $('options-summary').textContent = `${fmt} · ${period} · ${speed}`;
+  const names = o.formats.map((f) => f.toUpperCase());
+  const fmt = names.length ? (names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : names[0]) : 'Sin formato';
+  const sinceText = o.since ? new Date(`${o.since}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  const period = { all: 'Todo el historial', since: o.since ? `Desde el ${sinceText}` : 'Desde una fecha', new: 'Solo lo nuevo' }[o.period];
+  $('options-summary').textContent = `${fmt}. ${period}. Velocidad ${SPEED_LABEL[o.speed] || 'normal'}.`;
   $('speed-hint').textContent = (SPEEDS[o.speed] || SPEEDS.normal).hint;
   if (o.period === 'since' && !o.since) $('since').focus();
   chrome.storage.local.set({ [STORAGE_KEY]: o });
@@ -564,7 +589,7 @@ function tickProgress() {
   } else if (s.total && s.done === s.total) {
     $('p-eta').textContent = '0:00';
   } else {
-    $('p-eta').textContent = 'calculando';
+    $('p-eta').textContent = 'Calculando';
   }
 }
 
@@ -586,14 +611,14 @@ function renderProgress(s) {
   $('p-active-wrap').hidden = !active.length;
   fillRows($('p-active'), active, (a) => {
     const li = el('li');
-    li.append(el('span', 'spinner'), el('span', 'name', a.name), el('span', 'num', fmtNum(a.count)));
+    li.append(svgIcon('i-spinner', 'spinner'), el('span', 'name', a.name), el('span', 'num', fmtNum(a.count)));
     return li;
   });
   const recent = s.recent || [];
   $('p-recent-wrap').hidden = !recent.length;
   fillRows($('p-recent'), recent, (r) => {
     const li = el('li');
-    li.append(svgIcon(r.error ? 'i-alert' : 'i-check', r.error ? 'bad' : 'ok'), el('span', 'name', r.name), el('span', 'num', fmtNum(r.count)));
+    li.append(svgIcon(r.error ? 'i-alert' : 'i-check-circle', r.error ? 'bad' : 'ok'), el('span', 'name', r.name), el('span', 'num', fmtNum(r.count)));
     return li;
   });
   renderErrors('p', s);
@@ -609,9 +634,9 @@ function renderDone(s) {
   const ok = s.status === 'done';
   const count = s.errorCount || 0;
   const icon = $('d-icon');
-  icon.className = `result-icon${ok && !count ? '' : ' warn'}`;
+  icon.className = `result-icon${ok && !count ? '' : ' warn-state'}`;
   icon.textContent = '';
-  icon.append(svgIcon(ok && !count ? 'i-check' : 'i-alert'));
+  icon.append(svgIcon(ok && !count ? 'i-check-circle' : 'i-alert'));
   $('d-title').textContent = ok ? 'Exportación lista' : s.status === 'cancelled' ? 'Exportación cancelada' : 'La exportación se detuvo';
   $('d-sub').textContent = ok
     ? 'El archivo se guardó en tu carpeta de Descargas.'

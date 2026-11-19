@@ -2,7 +2,7 @@
 
 Extensión de Chrome que exporta tus chats de WhatsApp Web, con historial completo, a TXT, JSON y CSV dentro de un solo ZIP. Pensada para analizar conversaciones con Claude.
 
-- **Panel lateral** que queda abierto junto a WhatsApp Web: eliges chats, opciones y ves el progreso en vivo.
+- **Panel lateral con diseño estilo Apple** (listas agrupadas, controles nativos, modo claro y oscuro) que queda abierto junto a WhatsApp Web: eliges chats, opciones y ves el progreso en vivo.
 - **Masivo y rápido:** procesa varios chats en paralelo y escala de forma lineal con el tamaño del historial.
 - **Incremental:** en las siguientes corridas exporta solo lo nuevo y salta los chats sin cambios.
 - **100 % local:** sin servidores, sin analítica y sin conexiones de red. Chrome bloquea por política cualquier intento de conexión desde la extensión. Ver [Privacidad y seguridad](#privacidad-y-seguridad).
@@ -22,8 +22,8 @@ Requiere Chrome 116 o posterior.
 2. Por defecto todos están seleccionados. Arriba de la lista puedes:
    - **Incluir grupos:** apágalo para dejar fuera todos los grupos.
    - **Último mensaje:** exporta solo los chats con actividad reciente (Día, Semana, Mes o 3 meses). "Cualquiera" no filtra por fecha.
-   - Usar la búsqueda o las pestañas (Personas, Grupos, Archivados) para ajustar la selección a mano.
-3. Revisa **Opciones** si quieres cambiar formatos, periodo o velocidad.
+   - Usar la búsqueda o el control Todos, Personas, Grupos y Archivados para ajustar la selección a mano.
+3. Si quieres cambiar formatos, periodo o velocidad, abre **Opciones** con el ícono de ajustes (arriba a la derecha). El resumen de lo elegido aparece sobre el botón de exportar.
 4. Clic en **Exportar N chats**. El panel muestra avance, mensajes por segundo y tiempo restante. También aparece un indicador pequeño dentro de WhatsApp Web.
 5. Al terminar se descarga `whatsapp-export-AAAAMMDD-HHMM.zip`. Si cancelas, se descarga lo exportado hasta ese momento (`-parcial.zip`).
 

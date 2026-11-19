@@ -90,6 +90,17 @@ async function openPanel(context, extId) {
   return panel;
 }
 
+async function openSheet(panel) {
+  await panel.click('#open-options');
+  await panel.waitForSelector('.sheet-backdrop.open');
+  await panel.waitForTimeout(400); // animacion de la hoja
+}
+
+async function closeSheet(panel) {
+  await panel.click('#sheet-done');
+  await panel.waitForSelector('#sheet', { state: 'hidden' });
+}
+
 async function exportFromPanel(panel, waPage) {
   const dl = waPage.waitForEvent('download', { timeout: 120000 });
   const t0 = Date.now();
@@ -134,25 +145,27 @@ try {
   // ---------- Panel: lista, filtros y busqueda ----------
   let panel = await openPanel(context, extId);
   assert.equal(await panel.locator('.row').count(), 4, 'excluye status@broadcast');
-  assert.match(await panel.textContent('#conn-text'), /Conectado · \+5215500000000/);
+  assert.match(await panel.textContent('#conn-text'), /Conectado: \+5215500000000/);
   assert.equal(await panel.textContent('#primary'), 'Exportar 4 chats');
-  assert.equal(await panel.textContent('.chip[data-filter="group"] span'), '1');
-  assert.equal(await panel.textContent('.chip[data-filter="archived"] span'), '1');
+  assert.equal(await panel.textContent('#sel-count'), '4 de 4 seleccionados');
   assert.ok(await panel.locator('#period-new input').isDisabled(), '"Solo lo nuevo" sin exportacion previa');
   await shot(panel, '1-seleccion');
 
-  await panel.click('.chip[data-filter="group"]');
+  await panel.click('#scope label:has(input[value="group"])');
   assert.equal(await panel.locator('.row').count(), 1);
-  await panel.click('.chip[data-filter="all"]');
+  await panel.click('#scope label:has(input[value="archived"])');
+  assert.equal(await panel.locator('.row').count(), 1);
+  await panel.click('#scope label:has(input[value="all"])');
   await panel.fill('#search', 'banco');
   await panel.waitForFunction(() => document.querySelectorAll('.row').length === 1);
   await panel.fill('#search', '');
   await panel.waitForFunction(() => document.querySelectorAll('.row').length === 4);
 
-  await panel.click('#options summary');
-  await panel.click('.segmented label:has(input[value="fast"])');
-  assert.match(await panel.textContent('#options-summary'), /TXT, JSON, CSV · Todo · Rápida/);
+  await openSheet(panel);
+  await panel.click('#speed label:has(input[value="fast"])');
   await shot(panel, '2-opciones');
+  await closeSheet(panel);
+  assert.equal(await panel.textContent('#options-summary'), 'TXT, JSON y CSV. Todo el historial. Velocidad rápida.');
 
   // ---------- Exportacion completa (4 chats en paralelo) ----------
   const r1 = await exportFromPanel(panel, wa);
@@ -246,9 +259,12 @@ try {
   await panel.click('#primary'); // "Nueva exportacion"
   await panel.waitForSelector('#view-select:not([hidden])');
   assert.ok(!(await panel.locator('#period-new input').isDisabled()), '"Solo lo nuevo" habilitado');
-  assert.equal(await panel.locator('.row .badge-new').count(), 1, 'marca el chat con mensajes nuevos');
+  assert.equal(await panel.locator('.row .new-dot').count(), 1, 'marca el chat con mensajes nuevos');
+  await openSheet(panel);
   await panel.click('#period-new');
-  await panel.click('.toggle:has(input[value="csv"])');
+  await panel.click('label.choice:has(input[value="csv"])');
+  await closeSheet(panel);
+  assert.equal(await panel.textContent('#options-summary'), 'TXT y JSON. Solo lo nuevo. Velocidad rápida.');
   const r2 = await exportFromPanel(panel, wa);
   const idx2 = JSON.parse(r2.files['index.json']);
   console.log('ZIP 2:', Object.keys(r2.files));
@@ -262,14 +278,17 @@ try {
   // ---------- Seleccion manual y limite por chat ----------
   await panel.click('#primary');
   await panel.waitForSelector('#view-select:not([hidden])');
-  await panel.click('.radio-card:has(input[value="all"])');
-  await panel.click('.list-head .check'); // deseleccionar todos
+  await openSheet(panel);
+  await panel.click('label.choice:has(input[name="period"][value="all"])');
+  await panel.fill('#maxPerChat', '100');
+  await closeSheet(panel);
+  assert.equal(await panel.textContent('#select-all'), 'Deseleccionar todo');
+  await panel.click('#select-all'); // deseleccionar todos
   assert.equal(await panel.textContent('#primary'), 'Selecciona al menos un chat');
   assert.ok(await panel.locator('#primary').isDisabled());
   await panel.fill('#search', 'ana');
   await panel.waitForFunction(() => document.querySelectorAll('.row').length === 1);
   await panel.click('.row');
-  await panel.fill('#maxPerChat', '100');
   assert.equal(await panel.textContent('#primary'), 'Exportar 1 chat');
   const r3 = await exportFromPanel(panel, wa);
   const idx3 = JSON.parse(r3.files['index.json']);
@@ -281,24 +300,25 @@ try {
   await panel.waitForSelector('#view-select:not([hidden])');
   await panel.fill('#search', '');
   await panel.waitForFunction(() => document.querySelectorAll('.row').length === 4);
+  await openSheet(panel);
   await panel.fill('#maxPerChat', '0');
-  await panel.click('.list-head .check'); // seleccionar todos
+  await closeSheet(panel);
+  await panel.click('#select-all'); // seleccionar todos
   assert.equal(await panel.textContent('#primary'), 'Exportar 4 chats');
 
   await panel.click('#activity label:has(input[value="1"])'); // ultimo dia
   await panel.waitForFunction(() => document.querySelectorAll('.row').length === 2);
   assert.equal(await panel.textContent('#primary'), 'Exportar 2 chats');
-  assert.equal(await panel.textContent('#sel-count'), '2 de 2');
+  assert.equal(await panel.textContent('#sel-count'), '2 de 2 seleccionados');
   await panel.click('#activity label:has(input[value="7"])'); // ultima semana
   await panel.waitForFunction(() => document.querySelectorAll('.row').length === 2);
   await panel.click('#activity label:has(input[value="90"])'); // 3 meses
   await panel.waitForFunction(() => document.querySelectorAll('.row').length === 3);
   await panel.click('#activity label:has(input[value="30"])'); // ultimo mes
   await panel.waitForFunction(() => document.querySelectorAll('.row').length === 3);
-  assert.equal(await panel.textContent('.chip[data-filter="group"] span'), '1');
-  await panel.click('label.switch:has(#includeGroups)'); // sin grupos
+  await panel.click('label.cell:has(#includeGroups)'); // sin grupos
   await panel.waitForFunction(() => document.querySelectorAll('.row').length === 2);
-  assert.ok(await panel.locator('.chip[data-filter="group"]').isHidden(), 'oculta el filtro de grupos');
+  assert.ok(await panel.locator('#scope [data-kind="group"]').isHidden(), 'oculta el filtro de grupos');
   assert.equal(await panel.textContent('#primary'), 'Exportar 2 chats');
   await panel.waitForTimeout(300); // deja terminar la animacion del interruptor
   await shot(panel, '6-filtros');
@@ -323,7 +343,7 @@ try {
   // Sin chats en el rango: boton deshabilitado con explicacion.
   await panel.click('#primary');
   await panel.waitForSelector('#view-select:not([hidden])');
-  await panel.click('label.switch:has(#includeGroups)'); // con grupos
+  await panel.click('label.cell:has(#includeGroups)'); // con grupos
   await panel.click('#activity label:has(input[value="1"])');
   await wa.evaluate(() => window.__mock.ageAll(3 * 86400));
   await panel.click('#refresh');
@@ -338,7 +358,9 @@ try {
 
   // ---------- Cancelacion: descarga parcial ----------
   assert.equal(await panel.textContent('#primary'), 'Exportar 4 chats');
-  await panel.click('.segmented label:has(input[value="careful"])');
+  await openSheet(panel);
+  await panel.click('#speed label:has(input[value="careful"])');
+  await closeSheet(panel);
   await wa.evaluate(() => window.__mock.resetHistory());
   const dl = wa.waitForEvent('download');
   await panel.click('#primary');
