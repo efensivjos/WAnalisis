@@ -75,8 +75,8 @@ En `chrome://extensions`, presiona **Quitar** en la tarjeta de WAnalisis. Esto b
 
 `npm run package` imprime la huella SHA-256 del ZIP, y el resultado es reproducible: el mismo código siempre da la misma huella. Quien reciba el archivo puede compararla para confirmar que no fue modificado:
 
-- Windows: `certutil -hashfile wanalisis-extension-v2.4.0.zip SHA256`
-- Mac o Linux: `shasum -a 256 wanalisis-extension-v2.4.0.zip`
+- Windows: `certutil -hashfile wanalisis-extension-v2.4.1.zip SHA256`
+- Mac o Linux: `shasum -a 256 wanalisis-extension-v2.4.1.zip`
 
 ## Uso
 
