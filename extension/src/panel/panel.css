@@ -159,18 +159,54 @@ label.cell:active, summary.cell:active { background: var(--cell-pressed); }
 .switch input:checked + .track::after { transform: translateX(17px); }
 .switch input:focus-visible + .track { outline: 3px solid var(--focus); outline-offset: 2px; }
 
-/* Filas de eleccion con marca de verificacion */
-.choice input { position: absolute; opacity: 0; pointer-events: none; }
-.checkmark { color: var(--blue); width: 18px; height: 18px; opacity: 0; }
-.choice:has(input:checked) .checkmark { opacity: 1; }
-.choice:has(input:disabled) { cursor: default; }
-.choice:has(input:disabled) .cell-title { color: var(--label-3); }
-.choice:has(input:focus-visible) { box-shadow: inset 0 0 0 3px var(--focus); }
-.date-cell { display: none; }
-#period-group:has(input[value="since"]:checked) .date-cell { display: flex; }
+/* Menu desplegable (pop-up button): valor en gris y flechas, como en Ajustes */
+.popup { position: relative; display: inline-flex; align-items: center; gap: 4px; color: var(--label-2); flex: none; max-width: 60%; }
+.popup select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; color: inherit; font: inherit; text-align: right; text-align-last: right; padding: 0 2px 0 0; cursor: pointer; outline: none; max-width: 100%; text-overflow: ellipsis; }
+.popup svg { width: 13px; height: 13px; pointer-events: none; }
+.popup:focus-within { color: var(--blue); }
+.popup select:focus-visible { outline: 3px solid var(--focus); border-radius: 6px; }
+.popup select option { color: CanvasText; }
+
+/* Capsulas de seleccion multiple (formatos) */
+.capsules { display: flex; gap: 6px; flex: none; }
+.capsule input { position: absolute; opacity: 0; pointer-events: none; }
+.capsule span { display: block; min-width: 46px; text-align: center; padding: 4px 10px; border-radius: 14px; background: var(--fill); color: var(--label-2); font-size: 12.5px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
+.capsule input:checked + span { background: var(--blue); color: #fff; }
+.capsule input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 1px; }
+
+/* Fila secundaria (fecha) y nota bajo una fila */
+.sub-cell .cell-title { color: var(--label-2); padding-left: 12px; }
+.cell-note { margin: 0; padding: 0 16px 10px; font-size: 12px; color: var(--label-2); }
+button.cell { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+button.cell:active { background: var(--cell-pressed); }
+.disclosure .cell-title { color: var(--label); }
+
+/* Fecha en capsula (formato segun el idioma de la extension); el selector nativo se abre al hacer clic */
+.date-field { position: relative; flex: none; }
+.date-field input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.date-text { display: block; padding: 4px 10px; border-radius: 8px; background: var(--fill); color: var(--label); font-variant-numeric: tabular-nums; }
+.date-text.empty { color: var(--blue); }
+.date-field:focus-within .date-text { box-shadow: 0 0 0 3px var(--focus); }
+
+/* Boton de informacion y tooltip */
+.section-header { display: flex; align-items: center; gap: 4px; }
+.cell-title { display: flex; align-items: center; gap: 4px; }
+.info { border: 0; background: none; padding: 0; margin: 0 0 0 2px; width: 20px; height: 20px; display: inline-grid; place-items: center; color: var(--blue); cursor: help; border-radius: 50%; flex: none; opacity: .85; }
+.info:hover, .info[aria-expanded="true"] { opacity: 1; }
+.info svg { width: 15px; height: 15px; }
+.section-header .info svg { width: 13px; height: 13px; }
+.tooltip {
+  position: fixed; z-index: 30; max-width: 280px; padding: 9px 12px; border-radius: 10px;
+  background: rgba(30, 30, 32, .92); color: #fff; font-size: 12.5px; line-height: 1.4;
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .25); pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  .tooltip { background: rgba(72, 72, 74, .94); }
+}
 
 /* ---------- Lista de chats ---------- */
-.list-head { display: flex; align-items: baseline; justify-content: space-between; }
+.section-header.list-head { display: flex; align-items: baseline; justify-content: space-between; }
 .text-btn { border: 0; background: none; color: var(--blue); cursor: pointer; padding: 0; font-size: 13px; }
 .text-btn.strong { font-weight: 600; font-size: 14px; }
 .text-btn:hover { opacity: .75; }
@@ -203,8 +239,6 @@ label.cell:active, summary.cell:active { background: var(--cell-pressed); }
   backdrop-filter: saturate(180%) blur(20px);
   border-top: .5px solid var(--separator);
 }
-.footer-summary { margin: 0 0 8px; text-align: center; color: var(--label-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.footer-summary:empty { display: none; }
 .toolbar-actions { display: flex; gap: 8px; }
 .btn { border: 0; border-radius: 12px; min-height: 44px; padding: 0 20px; font-weight: 600; font-size: 15px; cursor: pointer; transition: opacity .15s, transform .1s; }
 .btn:active { transform: scale(.985); opacity: .85; }

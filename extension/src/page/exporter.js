@@ -47,15 +47,158 @@
     includeIndividuals: true,
     includeGroups: true,
     activityDays: 0, // 0 = cualquier fecha; N = solo chats con ultimo mensaje en los ultimos N dias
+    activitySince: null, // 'YYYY-MM-DD': solo chats con ultimo mensaje en esa fecha o despues
+    lang: 'en', // 'en' | 'es': idioma de los textos legibles (TXT, ayuda, nombres de archivo)
     includeArchived: true,
     includeSystem: false,
     nameFilter: '',
-    meName: 'Yo',
+    meName: '', // vacio = "Me" en ingles, "Yo" en espanol
     concurrency: 2,
     delayMs: 150,
     loadTimeoutMs: 45000,
     maxStalls: 3,
   };
+
+  // ------------------------------------------------------------------
+  // Textos en ingles y espanol (exportacion e indicador en la pagina)
+  // ------------------------------------------------------------------
+
+  const TEXT = {
+    en: {
+      lang: 'en',
+      locale: 'en-US',
+      me: 'Me',
+      chat: 'Chat',
+      kind: { individual: 'individual chat', group: 'group', channel: 'channel', broadcast: 'broadcast' },
+      media: { image: 'image', video: 'video', gif: 'GIF', ptv: 'video', audio: 'audio', ptt: 'voice note', sticker: 'sticker', document: 'document' },
+      file: 'file',
+      forwarded: 'forwarded',
+      repliesTo: 'replying to',
+      aMessage: 'a message',
+      location: 'location',
+      contact: 'contact',
+      poll: 'poll',
+      participants: 'Participants',
+      messages: 'Messages',
+      fromTo: (a, b) => `from ${a} to ${b}`,
+      exported: 'Exported',
+      allCsv: 'all_messages.csv',
+      readmeName: 'README.txt',
+      loadingHistory: 'loading history',
+      timeout: (what) => `timed out while ${what}`,
+      incomplete: (why) => `incomplete history: ${why}`,
+      noAccess:
+        "Could not access WhatsApp Web data. Make sure you are signed in and the chat list is loaded. If it is, WhatsApp may have changed its internal modules (MODULES in exporter.js).",
+      alreadyRunning: 'An export is already running.',
+      cancelledByUser: 'Cancelled by the user.',
+      ov: {
+        exporting: 'Exporting chats',
+        ready: 'Export ready',
+        cancelled: 'Export cancelled',
+        failed: 'Export failed',
+        cancel: 'Cancel',
+        minimize: 'Minimize',
+        hide: 'Hide',
+        progress: (d, t, m) => `${d} of ${t} chats, ${m} messages`,
+        loaded: (n, c) => `${n}: ${c} messages loaded`,
+        summary: (m, c) => `${m} messages from ${c} chats`,
+        partial: (f) => `Partial: ${f}`,
+        pill: (p, m) => `${p}%, ${m} messages`,
+        phase: { connecting: 'Connecting to WhatsApp Web', loading: 'Loading history', reading: 'Reading messages', zipping: 'Creating ZIP', cancelling: 'Cancelling: what is done so far will be downloaded' },
+      },
+      readme: (f) => [
+        'WhatsApp Web chat export (WAnalisis)',
+        '',
+        'Contents:',
+        '  index.json            Chat list with message counts, dates and file paths.',
+        ...(f.has('txt') ? ['  txt/<chat>.txt        Readable transcript per chat. The format that uses the fewest tokens in Claude.'] : []),
+        ...(f.has('json') ? ['  json/<chat>.json      One file per chat: chat metadata and message list.'] : []),
+        ...(f.has('csv') ? ['  csv/<chat>.csv        One file per chat (UTF-8 with BOM, opens in Excel).', '  all_messages.csv      Every message from every chat in a single table.'] : []),
+        '',
+        'Message fields (JSON/CSV):',
+        '  datetime     Local date and time (ISO 8601).',
+        '  timestamp    Unix seconds.',
+        '  sender_name  Sender (your configured name when from_me = true).',
+        '  type         chat (text), image, video, audio, ptt (voice note), document, sticker, location, ...',
+        '  text         Text or caption. Media files are not included, only their metadata.',
+        '  quoted_*     The message being replied to, if any.',
+        '',
+        'Tips for Claude:',
+        '  - To read conversations, upload the .txt files of the chats you care about.',
+        '  - For quantitative analysis (who writes most, times, trends), use all_messages.csv.',
+        '  - index.json gives the overview to decide which chats to review.',
+        '',
+      ],
+    },
+    es: {
+      lang: 'es',
+      locale: 'es-ES',
+      me: 'Yo',
+      chat: 'Chat',
+      kind: { individual: 'chat individual', group: 'grupo', channel: 'canal', broadcast: 'difusión' },
+      media: { image: 'imagen', video: 'video', gif: 'GIF', ptv: 'video', audio: 'audio', ptt: 'nota de voz', sticker: 'sticker', document: 'documento' },
+      file: 'archivo',
+      forwarded: 'reenviado',
+      repliesTo: 'responde a',
+      aMessage: 'un mensaje',
+      location: 'ubicación',
+      contact: 'contacto',
+      poll: 'encuesta',
+      participants: 'Participantes',
+      messages: 'Mensajes',
+      fromTo: (a, b) => `del ${a} al ${b}`,
+      exported: 'Exportado',
+      allCsv: 'todos_los_mensajes.csv',
+      readmeName: 'LEEME.txt',
+      loadingHistory: 'cargar historial',
+      timeout: (what) => `tiempo de espera agotado al ${what}`,
+      incomplete: (why) => `historial incompleto: ${why}`,
+      noAccess:
+        'No se pudo acceder a los datos de WhatsApp Web. Verifica que la sesión esté iniciada y la lista de chats cargada. Si ya lo está, WhatsApp pudo cambiar sus módulos internos (MODULES en exporter.js).',
+      alreadyRunning: 'Ya hay una exportación en curso.',
+      cancelledByUser: 'Cancelada por el usuario.',
+      ov: {
+        exporting: 'Exportando chats',
+        ready: 'Exportación lista',
+        cancelled: 'Exportación cancelada',
+        failed: 'Error al exportar',
+        cancel: 'Cancelar',
+        minimize: 'Minimizar',
+        hide: 'Ocultar',
+        progress: (d, t, m) => `${d} de ${t} chats, ${m} mensajes`,
+        loaded: (n, c) => `${n}: ${c} mensajes cargados`,
+        summary: (m, c) => `${m} mensajes de ${c} chats`,
+        partial: (f) => `Parcial: ${f}`,
+        pill: (p, m) => `${p}%, ${m} mensajes`,
+        phase: { connecting: 'Conectando con WhatsApp Web', loading: 'Cargando historial', reading: 'Leyendo mensajes', zipping: 'Generando ZIP', cancelling: 'Cancelando: se descargará lo exportado hasta ahora' },
+      },
+      readme: (f) => [
+        'Exportación de chats de WhatsApp Web (WAnalisis)',
+        '',
+        'Contenido:',
+        '  index.json               Lista de chats con conteo de mensajes, fechas y rutas de archivos.',
+        ...(f.has('txt') ? ['  txt/<chat>.txt           Transcripción legible por chat. Es el formato con menos tokens para Claude.'] : []),
+        ...(f.has('json') ? ['  json/<chat>.json         Un archivo por chat: metadatos del chat y lista de mensajes.'] : []),
+        ...(f.has('csv') ? ['  csv/<chat>.csv           Un archivo por chat (UTF-8 con BOM, compatible con Excel).', '  todos_los_mensajes.csv   Todos los mensajes de todos los chats en una sola tabla.'] : []),
+        '',
+        'Campos de cada mensaje (JSON/CSV):',
+        '  datetime     Fecha y hora local (ISO 8601).',
+        '  timestamp    Segundos Unix.',
+        '  sender_name  Remitente (tu nombre configurado si from_me = true).',
+        '  type         chat (texto), image, video, audio, ptt (nota de voz), document, sticker, location, ...',
+        '  text         Texto o pie de foto. Los archivos multimedia no se incluyen, solo sus metadatos.',
+        '  quoted_*     Mensaje al que se respondió, si aplica.',
+        '',
+        'Sugerencias para Claude:',
+        '  - Para leer conversaciones, sube los .txt de los chats que te interesen.',
+        '  - Para análisis cuantitativo (quién escribe más, horarios, tendencias), usa todos_los_mensajes.csv.',
+        '  - index.json da el panorama general para decidir qué chats revisar.',
+        '',
+      ],
+    },
+  };
+
+  let T = TEXT.en; // idioma de la corrida en curso
 
   // ------------------------------------------------------------------
   // Utilidades
@@ -69,7 +212,11 @@
     return Promise.race([
       promise,
       new Promise((_, rej) => {
-        t = setTimeout(() => rej(new Error(`Tiempo de espera agotado: ${label}`)), ms);
+        t = setTimeout(() => {
+          const err = new Error(T.timeout(label));
+          err.code = 'TIMEOUT';
+          rej(err);
+        }, ms);
       }),
     ]).finally(() => clearTimeout(t));
   }
@@ -290,10 +437,7 @@
       if (isReady()) return getWA();
       await sleep(1000);
     }
-    throw new Error(
-      'No se pudo acceder a los datos de WhatsApp Web. Verifica que la sesión esté iniciada y la ' +
-        'lista de chats cargada. Si ya lo esta, WhatsApp pudo cambiar sus módulos internos (MODULES en exporter.js).'
-    );
+    throw new Error(T.noAccess);
   }
 
   function getMeJid(wa) {
@@ -475,32 +619,41 @@
     ]);
   }
 
-  const KIND_LABEL = { individual: 'chat individual', group: 'grupo', channel: 'canal', broadcast: 'difusión' };
-  const MEDIA_LABEL = {
-    image: 'imagen', video: 'video', gif: 'gif', ptv: 'video', audio: 'audio',
-    ptt: 'nota de voz', sticker: 'sticker', document: 'documento',
-  };
-
   const trunc = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+  /** Fecha legible: dia/mes/ano en espanol, mes/dia/ano en ingles. */
+  function fmtDate(unix, lang = T.lang) {
+    const d = new Date(unix * 1000);
+    const dd = pad(d.getDate());
+    const mm = pad(d.getMonth() + 1);
+    return lang === 'es' ? `${dd}/${mm}/${d.getFullYear()}` : `${mm}/${dd}/${d.getFullYear()}`;
+  }
+
+  /** Hora legible: 24 h en espanol, 12 h con AM/PM en ingles. */
+  function fmtTime(unix, lang = T.lang) {
+    const d = new Date(unix * 1000);
+    if (lang === 'es') return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${d.getHours() % 12 || 12}:${pad(d.getMinutes())} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
+  }
 
   function transcriptBody(m) {
     const parts = [];
-    if (m.forwarded) parts.push('[reenviado]');
+    if (m.forwarded) parts.push(`[${T.forwarded}]`);
     if (m.quoted_id) {
-      const who = m.quoted_sender || 'mensaje';
-      parts.push(m.quoted_text ? `[responde a ${who}: "${trunc(m.quoted_text.replace(/\s+/g, ' '), 80)}"]` : `[responde a ${who}]`);
+      const who = m.quoted_sender || T.aMessage;
+      parts.push(m.quoted_text ? `[${T.repliesTo} ${who}: "${trunc(m.quoted_text.replace(/\s+/g, ' '), 80)}"]` : `[${T.repliesTo} ${who}]`);
     }
     if (m.media) {
-      let label = MEDIA_LABEL[m.type] || 'archivo';
+      let label = T.media[m.type] || T.file;
       if (m.media.filename) label += `: ${m.media.filename}`;
       else if (m.media.duration && (m.type === 'ptt' || m.type === 'audio' || m.type === 'video')) label += ` ${m.media.duration}s`;
       parts.push(`[${label}]`);
     } else if (m.type === 'location') {
-      parts.push(m.location ? `[ubicación ${m.location.lat},${m.location.lng}]` : '[ubicación]');
+      parts.push(m.location ? `[${T.location} ${m.location.lat},${m.location.lng}]` : `[${T.location}]`);
     } else if (m.type === 'vcard' || m.type === 'multi_vcard') {
-      parts.push('[contacto]');
+      parts.push(`[${T.contact}]`);
     } else if (m.type === 'poll_creation') {
-      parts.push(`[encuesta${m.poll_options ? `: ${m.poll_options.join(' / ')}` : ''}]`);
+      parts.push(`[${T.poll}${m.poll_options ? `: ${m.poll_options.join(' / ')}` : ''}]`);
     } else if (m.type !== 'chat' && !m.text) {
       parts.push(`[${m.type}]`);
     }
@@ -508,27 +661,27 @@
     return parts.join(' ');
   }
 
-  /** Transcripción compacta: la forma con menos tokens para que Claude la lea. */
-  function transcript(info, msgs, exportedAt) {
-    const head = [`Chat: ${info.name} (${KIND_LABEL[info.kind] || info.kind})`];
+  /** Transcripcion compacta: la forma con menos tokens para que Claude la lea. */
+  function transcript(info, msgs, exportedAtUnix) {
+    const head = [`${T.chat}: ${info.name} (${T.kind[info.kind] || info.kind})`];
     if (info.participants?.length) {
-      head.push(`Participantes (${info.participants.length}): ${info.participants.map((p) => p.name).join(', ')}`);
+      head.push(`${T.participants} (${info.participants.length}): ${info.participants.map((p) => p.name).join(', ')}`);
     }
-    if (msgs.length) {
-      head.push(`Mensajes: ${msgs.length}, del ${msgs[0].datetime.slice(0, 10)} al ${msgs[msgs.length - 1].datetime.slice(0, 10)}`);
-    } else {
-      head.push('Mensajes: 0');
-    }
-    head.push(`Exportado: ${exportedAt}`);
+    head.push(
+      msgs.length
+        ? `${T.messages}: ${msgs.length}, ${T.fromTo(fmtDate(msgs[0].timestamp), fmtDate(msgs[msgs.length - 1].timestamp))}`
+        : `${T.messages}: 0`
+    );
+    head.push(`${T.exported}: ${fmtDate(exportedAtUnix)} ${fmtTime(exportedAtUnix)}`);
     const out = [head.join('\n')];
     let day = '';
     for (const m of msgs) {
-      const d = m.datetime.slice(0, 10);
-      if (d !== day) {
-        out.push(`\n--- ${d} ---`);
-        day = d;
+      const key = m.datetime.slice(0, 10);
+      if (key !== day) {
+        out.push(`\n--- ${fmtDate(m.timestamp)} ---`);
+        day = key;
       }
-      out.push(`[${m.datetime.slice(11, 16)}] ${m.sender_name}: ${transcriptBody(m)}`);
+      out.push(`[${fmtTime(m.timestamp)}] ${m.sender_name}: ${transcriptBody(m)}`);
     }
     return out.join('\n') + '\n';
   }
@@ -541,10 +694,10 @@
     const fn = wa.loadMod?.loadEarlierMsgs;
     if (typeof fn !== 'function') throw new Error('loadEarlierMsgs no disponible');
     try {
-      return await withTimeout(Promise.resolve(fn({ chat })), timeoutMs, 'cargar historial');
+      return await withTimeout(Promise.resolve(fn({ chat })), timeoutMs, T.loadingHistory);
     } catch (e) {
-      if (/Tiempo de espera/.test(e.message)) throw e;
-      return await withTimeout(Promise.resolve(fn(chat)), timeoutMs, 'cargar historial'); // firma antigua
+      if (e.code === 'TIMEOUT') throw e;
+      return await withTimeout(Promise.resolve(fn(chat)), timeoutMs, T.loadingHistory); // firma antigua
     }
   }
 
@@ -598,7 +751,7 @@
         try {
           loaded = await loadEarlier(wa, chat, opts.loadTimeoutMs);
         } catch (e) {
-          warning = `historial incompleto: ${e.message}`;
+          warning = T.incomplete(e.message);
           break;
         }
         if (Array.isArray(loaded)) {
@@ -690,7 +843,7 @@
   function requestCancel() {
     if (run.status !== 'running') return;
     run.cancelRequested = true;
-    run.phase = 'Cancelando: se descargará lo exportado hasta ahora';
+    run.phase = 'cancelling';
     emit(true);
   }
 
@@ -770,12 +923,12 @@
       const card = el('div', 'card');
       const head = el('div', 'row');
       const dot = el('span', 'dot');
-      const title = el('span', 'title', 'Exportando chats');
+      const title = el('span', 'title', T.ov.exporting);
       const min = el('button', 'icon-btn', '−');
-      min.title = 'Minimizar';
+      min.title = T.ov.minimize;
       min.addEventListener('click', () => wrap.classList.add('min'));
       const close = el('button', 'icon-btn', '×');
-      close.title = 'Ocultar';
+      close.title = T.ov.hide;
       close.addEventListener('click', () => {
         dismissed = true;
         host.classList.add('hidden');
@@ -788,7 +941,7 @@
       const main = el('div', 'main');
       const sub = el('div', 'sub');
       const actions = el('div', 'actions');
-      const cancel = el('button', 'btn', 'Cancelar');
+      const cancel = el('button', 'btn', T.ov.cancel);
       cancel.addEventListener('click', requestCancel);
       actions.append(cancel);
       card.append(head, track, main, sub, actions);
@@ -816,24 +969,26 @@
       const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
       els.fill.style.width = `${s.status === 'done' ? 100 : pct}%`;
       els.cancel.classList.toggle('hidden', s.status !== 'running');
-      const msgs = s.messagesTotal.toLocaleString('es');
+      const msgs = s.messagesTotal.toLocaleString(T.locale);
+      const phase = T.ov.phase[s.phase] || '';
+      els.cancel.textContent = T.ov.cancel;
 
       if (s.status === 'running') {
-        els.title.textContent = 'Exportando chats';
-        els.main.textContent = s.total ? `${s.done} de ${s.total} chats, ${msgs} mensajes` : s.phase;
+        els.title.textContent = T.ov.exporting;
+        els.main.textContent = s.total ? T.ov.progress(s.done, s.total, msgs) : phase;
         const act = s.active[0];
-        els.sub.textContent = act ? `${act.name}: ${act.count.toLocaleString('es')} mensajes cargados` : s.phase;
-        els.pillText.textContent = `${pct}%, ${msgs} mensajes`;
+        els.sub.textContent = act ? T.ov.loaded(act.name, act.count.toLocaleString(T.locale)) : phase;
+        els.pillText.textContent = T.ov.pill(pct, msgs);
       } else if (s.status === 'done') {
-        els.title.textContent = 'Exportación lista';
-        els.main.textContent = `${msgs} mensajes de ${s.total} chats`;
+        els.title.textContent = T.ov.ready;
+        els.main.textContent = T.ov.summary(msgs, s.total);
         els.sub.textContent = s.fileName;
-        els.pillText.textContent = 'Exportación lista';
+        els.pillText.textContent = T.ov.ready;
         wrap.classList.remove('min');
       } else {
-        els.title.textContent = s.status === 'cancelled' ? 'Exportación cancelada' : 'Error al exportar';
+        els.title.textContent = s.status === 'cancelled' ? T.ov.cancelled : T.ov.failed;
         els.main.textContent = s.error || '';
-        els.sub.textContent = s.fileName ? `Parcial: ${s.fileName}` : '';
+        els.sub.textContent = s.fileName ? T.ov.partial(s.fileName) : '';
         els.pillText.textContent = els.title.textContent;
         wrap.classList.remove('min');
       }
@@ -895,7 +1050,11 @@
     const wanted = Array.isArray(opts.chatIds) ? new Set(opts.chatIds) : null;
     const filter = (opts.nameFilter || '').trim().toLowerCase();
     const days = Math.max(0, Number(opts.activityDays) || 0);
-    const activeSince = days ? Math.floor(Date.now() / 1000) - days * 86400 : 0;
+    const activeSince = opts.activitySince
+      ? parseSince(opts.activitySince) + 1
+      : days
+        ? Math.floor(Date.now() / 1000) - days * 86400
+        : 0;
     const chats = wa.Chat.getModelsArray().filter((chat) => {
       const id = wid(chat.id);
       const kind = chatKind(id);
@@ -938,16 +1097,19 @@
   }
 
   async function runExport(userOptions) {
-    if (run.status === 'running') return { ok: false, error: 'Ya hay una exportación en curso.' };
+    if (run.status === 'running') return { ok: false, error: T.alreadyRunning };
     const opts = { ...DEFAULT_OPTIONS, ...(userOptions || {}) };
     opts.maxPerChat = Math.max(0, parseInt(opts.maxPerChat, 10) || 0);
     opts.delayMs = Math.max(0, parseInt(opts.delayMs, 10) || 0);
     opts.concurrency = Math.min(6, Math.max(1, parseInt(opts.concurrency, 10) || 1));
     const formats = new Set(Array.isArray(opts.formats) && opts.formats.length ? opts.formats : DEFAULT_OPTIONS.formats);
+    T = TEXT[opts.lang] || TEXT.en;
+    opts.lang = T.lang;
+    opts.meName = String(opts.meName || '').trim() || T.me;
 
     Object.assign(run, {
       status: 'running',
-      phase: 'Conectando con WhatsApp Web',
+      phase: 'connecting',
       total: 0,
       done: 0,
       messagesTotal: 0,
@@ -969,7 +1131,8 @@
   async function exportLoop(opts, formats) {
     const zip = new ZipWriter();
     const combined = formats.has('csv') ? new DeflateSink() : null;
-    const exportedAt = isoLocal(Date.now() / 1000);
+    const exportedAtUnix = Math.floor(Date.now() / 1000);
+    const exportedAt = isoLocal(exportedAtUnix);
     const last = normalizeLastRun(opts.lastRun);
     delete opts.lastRun; // no se copia al index.json
     const newLast = { at: Math.floor(Date.now() / 1000), chats: { ...last.chats } };
@@ -996,7 +1159,7 @@
       });
 
       run.total = jobs.length;
-      run.phase = opts.loadFullHistory ? 'Cargando historial' : 'Leyendo mensajes';
+      run.phase = opts.loadFullHistory ? 'loading' : 'reading';
       emit(true);
 
       const processJob = async ({ chat, id, base, i }) => {
@@ -1020,7 +1183,7 @@
 
         // Atajo: nada nuevo desde el corte, no hace falta cargar historial.
         if (cutoff && (chat.t || 0) <= cutoff) {
-          entry.skipped = 'sin mensajes nuevos';
+          entry.skipped = 'no_new_messages';
           run.active.delete(id);
           run.done++;
           emit();
@@ -1075,7 +1238,7 @@
           }
           if (formats.has('txt')) {
             entry.files.txt = `txt/${base}.txt`;
-            await zip.add(entry.files.txt, transcript(info, normalized, exportedAt));
+            await zip.add(entry.files.txt, transcript(info, normalized, exportedAtUnix));
           }
         }
 
@@ -1093,10 +1256,10 @@
       };
       await Promise.all(Array.from({ length: Math.min(opts.concurrency, jobs.length) }, worker));
 
-      run.phase = 'Generando ZIP';
+      run.phase = 'zipping';
       emit(true);
       const finalIndex = index.filter(Boolean);
-      if (combined) zip.addPrepared('todos_los_mensajes.csv', await combined.close());
+      if (combined) zip.addPrepared(T.allCsv, await combined.close());
       await zip.add(
         'index.json',
         JSON.stringify(
@@ -1114,7 +1277,7 @@
           2
         )
       );
-      await zip.add('LEEME.txt', readme(formats));
+      await zip.add(T.readmeName, readme(formats));
 
       const fileName = `whatsapp-export-${stamp()}${run.cancelRequested ? '-parcial' : ''}.zip`;
       const blob = zip.finish();
@@ -1122,7 +1285,7 @@
       if (!run.cancelRequested) saveLastRun(newLast);
       Object.assign(run, {
         status: run.cancelRequested ? 'cancelled' : 'done',
-        error: run.cancelRequested ? 'Cancelada por el usuario.' : '',
+        error: run.cancelRequested ? T.cancelledByUser : '',
         phase: '',
         fileName,
         fileSize: blob.size,
@@ -1152,35 +1315,7 @@
   }
 
   function readme(formats) {
-    const lines = [
-      'Exportación de chats de WhatsApp Web (WAnalisis)',
-      '',
-      'Contenido:',
-      '  index.json               Lista de chats con conteo de mensajes, fechas y rutas de archivos.',
-    ];
-    if (formats.has('txt')) lines.push('  txt/<chat>.txt           Transcripción legible por chat. Es el formato con menos tokens para Claude.');
-    if (formats.has('json')) lines.push('  json/<chat>.json         Un archivo por chat: metadatos del chat y lista de mensajes.');
-    if (formats.has('csv')) {
-      lines.push('  csv/<chat>.csv           Un archivo por chat (UTF-8 con BOM, compatible con Excel).');
-      lines.push('  todos_los_mensajes.csv   Todos los mensajes de todos los chats en una sola tabla.');
-    }
-    lines.push(
-      '',
-      'Campos de cada mensaje (JSON/CSV):',
-      '  datetime     Fecha y hora local (ISO 8601).',
-      '  timestamp    Segundos Unix.',
-      '  sender_name  Remitente (tu nombre configurado si from_me = true).',
-      '  type         chat (texto), image, video, audio, ptt (nota de voz), document, sticker, location, ...',
-      '  text         Texto o pie de foto. Los archivos multimedia no se incluyen, solo sus metadatos.',
-      '  quoted_*     Mensaje al que se respondió, si aplica.',
-      '',
-      'Sugerencias para Claude:',
-      '  - Para leer conversaciones, sube los .txt de los chats que te interesen.',
-      '  - Para análisis cuantitativo (quien escribe más, horarios, tendencias), usa todos_los_mensajes.csv.',
-      '  - index.json da el panorama general para decidir que chats revisar.',
-      ''
-    );
-    return lines.join('\r\n');
+    return T.readme(formats).join('\r\n');
   }
 
   // ------------------------------------------------------------------

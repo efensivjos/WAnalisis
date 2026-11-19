@@ -47,7 +47,7 @@ Haz clic en el ícono de rompecabezas (Extensiones), junto a la barra de direcci
 ### 6. Abre WhatsApp Web
 
 1. Abre https://web.whatsapp.com e inicia sesión con el código QR. Si la pestaña ya estaba abierta, recárgala.
-2. Haz clic en el ícono de WAnalisis. Se abre el panel lateral con tus chats.
+2. Haz clic en el ícono de WAnalisis. Se abre el panel lateral con tus chats. El panel está en inglés por defecto; cambia el idioma en **Language**.
 
 ### Actualizar a una versión nueva
 
@@ -75,35 +75,47 @@ En `chrome://extensions`, presiona **Quitar** en la tarjeta de WAnalisis. Esto b
 
 `npm run package` imprime la huella SHA-256 del ZIP, y el resultado es reproducible: el mismo código siempre da la misma huella. Quien reciba el archivo puede compararla para confirmar que no fue modificado:
 
-- Windows: `certutil -hashfile wanalisis-extension-v2.3.1.zip SHA256`
-- Mac o Linux: `shasum -a 256 wanalisis-extension-v2.3.1.zip`
+- Windows: `certutil -hashfile wanalisis-extension-v2.4.0.zip SHA256`
+- Mac o Linux: `shasum -a 256 wanalisis-extension-v2.4.0.zip`
 
 ## Uso
 
-1. Con WhatsApp Web abierto, haz clic en el ícono de la extensión. Se abre el panel lateral con todos tus chats.
-2. Por defecto todos están seleccionados. Arriba de la lista puedes:
+1. Con WhatsApp Web abierto, haz clic en el ícono de la extensión. Se abre el panel lateral con todos tus chats, todos seleccionados.
+2. En **Configuración** (pantalla principal):
+   - **Idioma:** inglés por defecto; cámbialo a español si lo prefieres.
+   - **Formato:** JSON por defecto. Activa también TXT o CSV si los necesitas.
+   - **Periodo:** todo el historial, desde una fecha, o solo lo nuevo desde tu última exportación.
+3. En **Filtros**:
    - **Incluir grupos:** apágalo para dejar fuera todos los grupos.
-   - **Último mensaje:** exporta solo los chats con actividad reciente (Día, Semana, Mes o 3 meses). "Cualquiera" no filtra por fecha.
-   - Usar la búsqueda o el control Todos, Personas, Grupos y Archivados para ajustar la selección a mano.
-3. Si quieres cambiar formatos, periodo o velocidad, abre **Opciones** con el ícono de ajustes (arriba a la derecha). El resumen de lo elegido aparece sobre el botón de exportar.
-4. Clic en **Exportar N chats**. El panel muestra avance, mensajes por segundo y tiempo restante. También aparece un indicador pequeño dentro de WhatsApp Web.
-5. Al terminar se descarga `whatsapp-export-AAAAMMDD-HHMM.zip`. Si cancelas, se descarga lo exportado hasta ese momento (`-parcial.zip`).
+   - **Último mensaje:** exporta solo los chats con actividad reciente (último día, semana, mes, 3 meses) o desde una **fecha específica** elegida en el calendario.
+4. Ajusta la selección a mano con la búsqueda o con Todos, Personas, Grupos y Archivados.
+5. Si necesitas más control, abre **Configuración avanzada** (fila al final de Configuración o ícono de ajustes arriba a la derecha).
+6. Haz clic en **Exportar N chats**. El panel muestra avance, mensajes por segundo y tiempo restante. También aparece un indicador pequeño dentro de WhatsApp Web.
+7. Al terminar se descarga `whatsapp-export-AAAAMMDD-HHMM.zip`. Si cancelas, se descarga lo exportado hasta ese momento (`-parcial.zip`).
+
+Cada opción tiene un ícono de información (ⓘ): pasa el mouse o haz clic sobre él para ver qué hace.
 
 ### Opciones
 
-| Opción | Efecto |
-| --- | --- |
-| Incluir grupos | Encendido: exporta chats individuales y grupos. Apagado: solo chats individuales. |
-| Último mensaje | Solo chats cuyo último mensaje cae en el último día, semana (7 días), mes (30 días) o 3 meses (90 días). No recorta los mensajes de cada chat; para eso está **Periodo**. |
-| Formatos | TXT (transcripción compacta), JSON (estructurado) y CSV (tabla). Puedes elegir cualquier combinación. |
-| Periodo | Todo el historial, desde una fecha, o solo lo nuevo desde la última exportación completa. |
-| Velocidad | Cuidadosa (1 chat a la vez con pausas), Normal (2 en paralelo, recomendado) o Rápida (4 en paralelo sin pausas). |
-| Tu nombre | Cómo apareces como remitente (por defecto "Yo"). |
-| Máximo por chat | Solo los N mensajes más recientes de cada chat (0 = sin límite). |
-| Mensajes de sistema | Avisos de cifrado, cambios de grupo, llamadas y mensajes eliminados. Desactivado por defecto. |
-| Solo mensajes ya cargados | No pide historial a WhatsApp; exporta lo que ya está en memoria. Muy rápido, pero incompleto. |
+| Dónde | Opción | Efecto |
+| --- | --- | --- |
+| Configuración | Idioma | Inglés (por defecto) o español. Cambia el panel, el indicador en WhatsApp Web y los textos legibles de la exportación. |
+| Configuración | Formato | JSON (por defecto), TXT (transcripción compacta) y CSV (tabla). Puedes elegir varios. |
+| Configuración | Periodo | Qué mensajes se exportan de cada chat: todo el historial, desde una fecha, o solo lo nuevo desde la última exportación completa. |
+| Filtros | Incluir grupos | Encendido: chats individuales y grupos. Apagado: solo chats individuales. |
+| Filtros | Último mensaje | Fecha del último mensaje enviado o recibido en cada conversación. Solo entran los chats cuyo último mensaje cae en el rango: último día, semana (7 días), mes (30 días), 3 meses (90 días) o desde una fecha específica. No recorta los mensajes de cada chat; para eso está **Periodo**. |
+| Avanzada | Velocidad | Cuidadosa (1 chat a la vez con pausas), Normal (2 en paralelo, recomendado) o Rápida (4 en paralelo sin pausas). |
+| Avanzada | Tu nombre | Cómo apareces como remitente. Por defecto "Me" en inglés y "Yo" en español. |
+| Avanzada | Máximo por chat | Solo los N mensajes más recientes de cada chat. Vacío = sin límite. |
+| Avanzada | Mensajes de sistema | Avisos de cifrado, cambios de grupo, llamadas y mensajes eliminados. Desactivado por defecto. |
+| Avanzada | Solo mensajes ya cargados | No pide historial a WhatsApp; exporta lo que ya está en memoria. Muy rápido, pero incompleto. |
 
 Las opciones se recuerdan entre sesiones.
+
+### Formato de fechas
+
+- En el panel y en las transcripciones TXT: día/mes/año y hora de 24 h en español (`22/10/2026 14:05`); mes/día/año y hora de 12 h en inglés (`10/22/2026 2:05 PM`).
+- En JSON y CSV se usa siempre el estándar ISO 8601 (`2026-10-22T14:05:00-06:00`), que se ordena bien en Excel y no es ambiguo para Claude.
 
 ## Contenido del ZIP
 
@@ -112,8 +124,8 @@ index.json                 Resumen: chats, conteos, primer y último mensaje, ru
 txt/<chat>__<id>.txt       Transcripción legible por chat (la opción con menos tokens)
 json/<chat>__<id>.json     Metadatos del chat + mensajes estructurados
 csv/<chat>__<id>.csv       Un CSV por chat (UTF-8 con BOM, abre bien en Excel)
-todos_los_mensajes.csv     Todos los mensajes en una sola tabla
-LEEME.txt                  Descripción de campos
+all_messages.csv           Todos los mensajes en una sola tabla (todos_los_mensajes.csv en español)
+README.txt                 Descripción de campos (LEEME.txt en español)
 ```
 
 Ejemplo de TXT (ocupa cerca de un tercio de lo que ocupa el JSON equivalente):
@@ -186,7 +198,7 @@ La extensión no puede controlar estos puntos; conviene revisarlos:
 ## Uso con Claude
 
 - **Leer y resumir conversaciones:** sube los `.txt` de los chats que te interesen.
-- **Análisis cuantitativo** (quién escribe más, horarios, tendencias): sube `todos_los_mensajes.csv`.
+- **Análisis cuantitativo** (quién escribe más, horarios, tendencias): sube `all_messages.csv` (o `todos_los_mensajes.csv` si exportaste en español).
 - **Muchos chats:** empieza por `index.json` para que Claude vea el panorama y elija qué revisar.
 
 ## Cómo funciona

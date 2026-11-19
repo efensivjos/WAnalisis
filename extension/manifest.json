@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "WAnalisis: exportar chats de WhatsApp Web",
+  "name": "__MSG_extName__",
   "short_name": "WAnalisis",
-  "version": "2.3.1",
-  "description": "Exporta masivamente tus chats de WhatsApp Web a JSON, CSV y TXT en un solo ZIP, listo para analizar con Claude.",
+  "version": "2.4.0",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
   "minimum_chrome_version": "116",
   "permissions": [
     "storage",
@@ -22,7 +23,7 @@
     "default_path": "src/panel/panel.html"
   },
   "action": {
-    "default_title": "Abrir panel de exportacion",
+    "default_title": "__MSG_actionTitle__",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

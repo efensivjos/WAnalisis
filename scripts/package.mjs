@@ -56,6 +56,28 @@ const entries = walk(src).map((file) => ({
   name: `${folder}/${path.relative(src, file).split(path.sep).join('/')}`,
   data: readFileSync(file),
 }));
+const INSTALL_EN = `WAnalisis ${version}: export WhatsApp Web chats
+
+Installing in Google Chrome (version 116 or later):
+
+1. Move this folder (wanalisis-extension) somewhere you will not delete it,
+   for example Documents. Chrome reads it from there every time it starts.
+2. Open a new tab and go to chrome://extensions
+3. Turn on "Developer mode" (top right).
+4. Click "Load unpacked" and select this folder
+   (the one that contains manifest.json).
+5. Pin the icon: click the puzzle piece next to the address bar
+   and then the pin next to WAnalisis.
+6. Open https://web.whatsapp.com, sign in and click the WAnalisis
+   icon to open the panel.
+
+Updating: replace the contents of this folder, press the extension's reload
+button in chrome://extensions and reload WhatsApp Web.
+
+Everything is processed on your computer. The extension never connects to the internet.
+`.replace(/\n/g, '\r\n');
+
+entries.push({ name: `${folder}/INSTALL.txt`, data: Buffer.from('\ufeff' + INSTALL_EN, 'utf8') });
 entries.push({ name: `${folder}/INSTALAR.txt`, data: Buffer.from('\ufeff' + INSTALL_TXT, 'utf8') });
 
 const parts = [];

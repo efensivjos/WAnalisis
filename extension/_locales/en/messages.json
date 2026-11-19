@@ -1,0 +1,5 @@
+{
+  "extName": { "message": "WAnalisis: export WhatsApp Web chats" },
+  "extDescription": { "message": "Bulk-export your WhatsApp Web chats to JSON, TXT and CSV in a single ZIP, ready to analyze with Claude. Everything stays on your computer." },
+  "actionTitle": { "message": "Open export panel" }
+}

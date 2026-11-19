@@ -38,6 +38,7 @@ try {
     }));
   });
   const ours = items.find((e) => e.name.startsWith('WAnalisis'));
+  if (ours) console.log(`Nombre mostrado: ${ours.name}`);
   if (!ours) throw new Error('La extension no se cargo');
   if (ours.state !== 'ENABLED') throw new Error(`Estado inesperado: ${ours.state}`);
   if (ours.problems.length) throw new Error(`Avisos en chrome://extensions:\n  - ${ours.problems.join('\n  - ')}`);
