@@ -18,7 +18,8 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const extDir = path.resolve(here, '..', 'extension');
+// EXT_DIR permite probar una copia empaquetada (por ejemplo, el ZIP de dist/ descomprimido).
+const extDir = path.resolve(process.env.EXT_DIR || path.join(here, '..', 'extension'));
 const mockHtml = readFileSync(path.join(here, 'mock-wa.html'), 'utf8');
 const shotsDir = process.env.SCREENSHOTS || '';
 if (shotsDir) mkdirSync(shotsDir, { recursive: true });

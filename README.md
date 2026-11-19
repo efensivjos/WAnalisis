@@ -7,14 +7,76 @@ Extensión de Chrome que exporta tus chats de WhatsApp Web, con historial comple
 - **Incremental:** en las siguientes corridas exporta solo lo nuevo y salta los chats sin cambios.
 - **100 % local:** sin servidores, sin analítica y sin conexiones de red. Chrome bloquea por política cualquier intento de conexión desde la extensión. Ver [Privacidad y seguridad](#privacidad-y-seguridad).
 
-## Instalación (modo desarrollador)
+## Instalación
 
-1. Descarga o clona este repositorio.
-2. Abre `chrome://extensions` y activa **Modo de desarrollador** (arriba a la derecha).
-3. Clic en **Cargar descomprimida** y elige la carpeta `extension/`.
-4. Abre (o recarga) https://web.whatsapp.com e inicia sesión.
+La extensión no está en la Chrome Web Store: se instala a mano en "modo desarrollador". Toma unos dos minutos y no requiere conocimientos técnicos.
 
-Requiere Chrome 116 o posterior.
+**Necesitas** Google Chrome 116 o posterior. Para ver tu versión, abre `chrome://settings/help`. Debería funcionar también en otros navegadores basados en Chromium (Edge, Brave), pero solo está probada en Chrome.
+
+### 1. Descarga la extensión
+
+Elige una de estas dos opciones:
+
+- **Opción A, el ZIP listo:** el archivo `wanalisis-extension-vX.Y.Z.zip` (te lo compartieron o lo generaste con `npm run package`).
+- **Opción B, desde GitHub:** en la página del repositorio, botón verde **Code** y luego **Download ZIP**. La extensión es la carpeta `extension` que viene dentro.
+
+### 2. Descomprime en una carpeta permanente
+
+1. Descomprime el ZIP. En Windows: clic derecho y **Extraer todo**. En Mac: doble clic.
+2. Mueve la carpeta resultante a un lugar donde no la vayas a borrar, por ejemplo Documentos.
+
+Chrome lee la extensión desde esa carpeta cada vez que se abre. Si la borras o la mueves, la extensión deja de funcionar.
+
+### 3. Activa el modo desarrollador
+
+1. Abre una pestaña nueva, escribe `chrome://extensions` en la barra de direcciones y presiona Enter.
+2. Activa el interruptor **Modo de desarrollador**, arriba a la derecha.
+
+### 4. Carga la extensión
+
+1. Haz clic en **Cargar descomprimida**, arriba a la izquierda.
+2. Selecciona la carpeta que contiene el archivo `manifest.json`:
+   - Con la opción A: la carpeta `wanalisis-extension`. En Windows puede quedar dentro de otra carpeta con un nombre parecido; entra hasta ver `manifest.json`.
+   - Con la opción B: la carpeta `extension`.
+3. Aparece la tarjeta **WAnalisis: exportar chats de WhatsApp Web**. Si ves un error, revisa que elegiste la carpeta correcta.
+
+### 5. Fija el ícono en la barra
+
+Haz clic en el ícono de rompecabezas (Extensiones), junto a la barra de direcciones, y luego en el alfiler junto a WAnalisis. Así el ícono queda siempre visible.
+
+### 6. Abre WhatsApp Web
+
+1. Abre https://web.whatsapp.com e inicia sesión con el código QR. Si la pestaña ya estaba abierta, recárgala.
+2. Haz clic en el ícono de WAnalisis. Se abre el panel lateral con tus chats.
+
+### Actualizar a una versión nueva
+
+1. Reemplaza el contenido de la carpeta por el de la versión nueva (misma ubicación).
+2. En `chrome://extensions`, presiona el botón de recargar (flecha circular) en la tarjeta de WAnalisis.
+3. Recarga la pestaña de WhatsApp Web.
+
+Tus opciones y el registro de la última exportación se conservan.
+
+### Desinstalar
+
+En `chrome://extensions`, presiona **Quitar** en la tarjeta de WAnalisis. Esto borra también las opciones guardadas y el registro de la última exportación. Después puedes borrar la carpeta.
+
+### Problemas comunes
+
+| Síntoma | Solución |
+| --- | --- |
+| Chrome dice que falta el archivo de manifiesto | Elegiste una carpeta equivocada. Selecciona la que contiene `manifest.json`. |
+| El panel dice "Recarga WhatsApp Web" | La pestaña se abrió antes de instalar o actualizar la extensión. Recárgala. |
+| No pasa nada al hacer clic en el ícono | Revisa que tu Chrome sea versión 116 o posterior. |
+| La extensión desapareció o marca error al abrir Chrome | Se movió o borró su carpeta. Vuelve a cargarla (paso 4). |
+| Chrome muestra un aviso sobre extensiones en modo desarrollador | Es normal en extensiones instaladas a mano. |
+
+### Verificar el ZIP (opcional)
+
+`npm run package` imprime la huella SHA-256 del ZIP, y el resultado es reproducible: el mismo código siempre da la misma huella. Quien reciba el archivo puede compararla para confirmar que no fue modificado:
+
+- Windows: `certutil -hashfile wanalisis-extension-v2.3.0.zip SHA256`
+- Mac o Linux: `shasum -a 256 wanalisis-extension-v2.3.0.zip`
 
 ## Uso
 
@@ -161,3 +223,11 @@ npm install
 npx playwright install chromium
 npm test                      # SCREENSHOTS=capturas npm test guarda capturas del panel
 ```
+
+## Empaquetar
+
+```bash
+npm run package               # genera dist/wanalisis-extension-v<versión>.zip e imprime su SHA-256
+```
+
+Corre la auditoría de privacidad antes de empaquetar. Para probar el paquete tal como lo recibe otra persona, descomprímelo y ejecuta la prueba contra esa copia: `EXT_DIR=ruta/a/wanalisis-extension node tests/e2e.mjs`.
