@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WAnalisis</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <svg class="sprite" width="0" height="0" aria-hidden="true">
+    <symbol id="i-search" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm9.5 16-4.8-4.8"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h9m4 0h3M4 17h3m4 0h9"/><circle cx="15" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m6 12.5 4 4 8-9"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="currentColor"/><path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m7 12.5 3.3 3.3L17 8.8"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path fill="currentColor" d="M10.3 3.4a2 2 0 0 1 3.4 0l8.4 14.5a2 2 0 0 1-1.7 3H3.6a2 2 0 0 1-1.7-3Z"/><path fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" d="M12 9v4.5m0 3.3v.1"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path fill="currentColor" d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" opacity=".18"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 0v6h6"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M11 11h2m-2 3h2m-2 3h2"/></symbol>
+    <symbol id="i-bubble" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3C6.5 3 2 6.8 2 11.5c0 2.6 1.4 4.9 3.6 6.5-.2 1.3-.8 2.5-1.8 3.4 2 0 3.8-.7 5.2-1.8 1 .3 2 .4 3 .4 5.5 0 10-3.8 10-8.5S17.5 3 12 3Z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><path fill="currentColor" d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10Zm2 0h6V8a3 3 0 0 0-6 0Z"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m9.5 6 6 6-6 6"/></symbol>
+    <symbol id="i-updown" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m8 9.5 4-4 4 4m-8 5 4 4 4-4"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="7.8" r="1.3" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M12 11v6"/></symbol>
+    <symbol id="i-spinner" viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 2.5v4.5"/><path d="m18.7 5.3-3.2 3.2" opacity=".85"/><path d="M21.5 12H17" opacity=".72"/><path d="m18.7 18.7-3.2-3.2" opacity=".6"/><path d="M12 21.5V17" opacity=".48"/><path d="m5.3 18.7 3.2-3.2" opacity=".36"/><path d="M2.5 12H7" opacity=".26"/><path d="m5.3 5.3 3.2 3.2" opacity=".18"/></g></symbol>
+  </svg>
+
+  <div class="app">
+    <header class="navbar" id="navbar">
+      <img class="app-icon" src="../../icons/icon48.png" alt="">
+      <div class="nav-text">
+        <span class="nav-title">WAnalisis</span>
+        <span class="conn" id="conn"><span class="dot"></span><span id="conn-text"></span></span>
+      </div>
+      <button class="nav-btn" id="refresh" data-i18n-title="refreshList" data-i18n-aria="refreshList" hidden><svg><use href="#i-refresh"/></svg></button>
+      <button class="nav-btn" id="open-options" data-i18n-title="advancedSettings" data-i18n-aria="advancedSettings" aria-haspopup="dialog" hidden><svg><use href="#i-sliders"/></svg></button>
+    </header>
+
+    <!-- Sin conexion con WhatsApp Web -->
+    <main class="view view-center" id="view-connect" hidden>
+      <div class="hero-icon"><svg><use href="#i-bubble"/></svg></div>
+      <h2 id="connect-title"></h2>
+      <p id="connect-text"></p>
+      <button class="btn filled" id="connect-action" hidden></button>
+    </main>
+
+    <!-- Seleccion de chats -->
+    <main class="view" id="view-select" hidden>
+      <h1 class="large-title" data-i18n="chats">Chats</h1>
+
+      <label class="search">
+        <svg><use href="#i-search"/></svg>
+        <input id="search" type="search" autocomplete="off" data-i18n-placeholder="search" data-i18n-aria="searchChat">
+      </label>
+
+      <div class="segmented scope" id="scope" role="radiogroup" data-i18n-aria="chatType">
+        <label><input type="radio" name="kind" value="all" checked><span data-i18n="kindAll">All</span></label>
+        <label><input type="radio" name="kind" value="individual"><span data-i18n="kindPeople">People</span></label>
+        <label data-kind="group"><input type="radio" name="kind" value="group"><span data-i18n="kindGroups">Groups</span></label>
+        <label><input type="radio" name="kind" value="archived"><span data-i18n="kindArchived">Archived</span></label>
+      </div>
+
+      <h3 class="section-header" data-i18n="settings">Settings</h3>
+      <div class="group" id="basic">
+        <label class="cell" for="lang">
+          <span class="cell-title"><span data-i18n="language">Language</span><button class="info" data-tip="tipLanguage"><svg><use href="#i-info"/></svg></button></span>
+          <span class="popup"><select id="lang"><option value="en">English</option><option value="es">Español</option></select><svg><use href="#i-updown"/></svg></span>
+        </label>
+        <div class="cell">
+          <span class="cell-title"><span data-i18n="format">Format</span><button class="info" data-tip="tipFormat"><svg><use href="#i-info"/></svg></button></span>
+          <div class="capsules" role="group" data-i18n-aria="format">
+            <label class="capsule"><input type="checkbox" name="fmt" value="json" checked><span>JSON</span></label>
+            <label class="capsule"><input type="checkbox" name="fmt" value="txt"><span>TXT</span></label>
+            <label class="capsule"><input type="checkbox" name="fmt" value="csv"><span>CSV</span></label>
+          </div>
+        </div>
+        <label class="cell" for="period">
+          <span class="cell-title"><span data-i18n="period">Period</span><button class="info" data-tip="tipPeriod"><svg><use href="#i-info"/></svg></button></span>
+          <span class="popup"><select id="period">
+            <option value="all" data-i18n="periodAll">All history</option>
+            <option value="since" data-i18n="periodSince">Since a date</option>
+            <option value="new" data-i18n="periodNew">Only new</option>
+          </select><svg><use href="#i-updown"/></svg></span>
+        </label>
+        <label class="cell sub-cell" id="since-cell" hidden for="since">
+          <span class="cell-title" data-i18n="messagesFrom">Messages from</span>
+          <span class="date-field"><input type="date" id="since"><span class="date-text" data-for="since"></span></span>
+        </label>
+        <p class="cell-note" id="period-note" hidden></p>
+        <button class="cell disclosure" id="open-advanced" aria-haspopup="dialog">
+          <span class="cell-title" data-i18n="advancedSettings">Advanced settings</span>
+          <svg class="chev"><use href="#i-chevron"/></svg>
+        </button>
+      </div>
+
+      <h3 class="section-header" data-i18n="filters">Filters</h3>
+      <div class="group">
+        <label class="cell" for="includeGroups">
+          <span class="cell-title"><span data-i18n="includeGroups">Include groups</span><button class="info" data-tip="tipIncludeGroups"><svg><use href="#i-info"/></svg></button></span>
+          <span class="switch"><input type="checkbox" id="includeGroups" checked><span class="track"></span></span>
+        </label>
+        <label class="cell" for="activity">
+          <span class="cell-title"><span data-i18n="lastMessage">Last message</span><button class="info" data-tip="tipLastMessage"><svg><use href="#i-info"/></svg></button></span>
+          <span class="popup"><select id="activity">
+            <option value="0" data-i18n="actAny">Any date</option>
+            <option value="1" data-i18n="actDay">Last day</option>
+            <option value="7" data-i18n="actWeek">Last week</option>
+            <option value="30" data-i18n="actMonth">Last month</option>
+            <option value="90" data-i18n="act3Months">Last 3 months</option>
+            <option value="date" data-i18n="actDate">Specific date</option>
+          </select><svg><use href="#i-updown"/></svg></span>
+        </label>
+        <label class="cell sub-cell" id="activity-date-cell" hidden for="activitySince">
+          <span class="cell-title"><span data-i18n="onOrAfter">On or after</span><button class="info" data-tip="tipActivityDate"><svg><use href="#i-info"/></svg></button></span>
+          <span class="date-field"><input type="date" id="activitySince"><span class="date-text" data-for="activitySince"></span></span>
+        </label>
+      </div>
+
+      <div class="section-header list-head">
+        <span id="sel-count"></span>
+        <button class="text-btn" id="select-all"></button>
+      </div>
+      <div class="group chat-list" id="list" role="list"></div>
+      <p class="empty" id="list-empty" hidden></p>
+
+      <p class="privacy-note"><svg><use href="#i-lock"/></svg><span data-i18n="privacyNote">Everything is processed on your computer. The extension never connects to the internet.</span></p>
+    </main>
+
+    <!-- Progreso -->
+    <main class="view" id="view-progress" hidden>
+      <h1 class="large-title" data-i18n="exporting">Exporting</h1>
+      <div class="ring-wrap">
+        <div class="ring">
+          <svg viewBox="0 0 120 120">
+            <circle class="ring-track" cx="60" cy="60" r="52"/>
+            <circle class="ring-fill" id="ring-fill" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="ring-label"><strong id="p-pct">0%</strong><span id="p-count"></span></div>
+        </div>
+        <p class="phase" id="p-phase"></p>
+      </div>
+
+      <div class="group">
+        <div class="cell"><span class="cell-title" data-i18n="statMessages">Messages</span><span class="cell-value" id="p-msgs">0</span></div>
+        <div class="cell"><span class="cell-title" data-i18n="statRate">Messages per second</span><span class="cell-value" id="p-rate">0</span></div>
+        <div class="cell"><span class="cell-title" data-i18n="statElapsed">Elapsed time</span><span class="cell-value" id="p-elapsed">0:00</span></div>
+        <div class="cell"><span class="cell-title" data-i18n="statRemaining">Time remaining</span><span class="cell-value" id="p-eta"></span></div>
+      </div>
+
+      <section id="p-active-wrap" hidden>
+        <h3 class="section-header" data-i18n="loadingNow">Loading now</h3>
+        <ul class="group rows" id="p-active"></ul>
+      </section>
+      <section id="p-recent-wrap" hidden>
+        <h3 class="section-header" data-i18n="finished">Finished</h3>
+        <ul class="group rows" id="p-recent"></ul>
+      </section>
+      <details class="group warn" id="p-errors-wrap" hidden>
+        <summary class="cell"><svg class="warn-icon"><use href="#i-alert"/></svg><span class="cell-title" id="p-errors-title"></span><svg class="chev"><use href="#i-chevron"/></svg></summary>
+        <ul class="rows" id="p-errors"></ul>
+      </details>
+      <p class="section-footer" data-i18n="keepOpen">You can keep using the browser. Leave the WhatsApp Web tab open until it finishes.</p>
+    </main>
+
+    <!-- Resultado -->
+    <main class="view" id="view-done" hidden>
+      <div class="result">
+        <div class="result-icon" id="d-icon"><svg><use href="#i-check-circle"/></svg></div>
+        <h1 class="result-title" id="d-title"></h1>
+        <p class="result-sub" id="d-sub"></p>
+      </div>
+
+      <div class="group" id="d-file-card">
+        <div class="cell file-cell">
+          <svg class="file-icon"><use href="#i-doc"/></svg>
+          <span class="cell-text"><span class="cell-title" id="d-file"></span><span class="cell-sub" id="d-size"></span></span>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="cell"><span class="cell-title" data-i18n="statChats">Chats</span><span class="cell-value" id="d-chats">0</span></div>
+        <div class="cell"><span class="cell-title" data-i18n="statMessages">Messages</span><span class="cell-value" id="d-msgs">0</span></div>
+        <div class="cell"><span class="cell-title" data-i18n="statDuration">Duration</span><span class="cell-value" id="d-time">0:00</span></div>
+      </div>
+
+      <details class="group warn" id="d-errors-wrap" hidden>
+        <summary class="cell"><svg class="warn-icon"><use href="#i-alert"/></svg><span class="cell-title" id="d-errors-title"></span><svg class="chev"><use href="#i-chevron"/></svg></summary>
+        <ul class="rows" id="d-errors"></ul>
+      </details>
+
+      <h3 class="section-header" data-i18n="nextStep">Next step with Claude</h3>
+      <div class="group">
+        <p class="cell cell-prose" id="next-step"></p>
+      </div>
+    </main>
+
+    <footer class="toolbar" id="footer" hidden>
+      <div class="toolbar-actions">
+        <button class="btn filled block" id="primary"></button>
+        <button class="btn tinted destructive block" id="secondary" hidden></button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Configuracion avanzada -->
+  <div class="sheet-backdrop" id="sheet" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <div class="sheet-bar">
+        <span></span>
+        <h2 id="sheet-title" data-i18n="advancedSettings">Advanced settings</h2>
+        <button class="text-btn strong" id="sheet-done" data-i18n="done">Done</button>
+      </div>
+      <div class="sheet-body" id="options">
+        <h3 class="section-header"><span data-i18n="speed">Speed</span><button class="info" data-tip="tipSpeed"><svg><use href="#i-info"/></svg></button></h3>
+        <div class="group">
+          <div class="cell cell-stack">
+            <div class="segmented" id="speed" role="radiogroup" data-i18n-aria="speed">
+              <label><input type="radio" name="speed" value="careful"><span data-i18n="speedCareful">Careful</span></label>
+              <label><input type="radio" name="speed" value="normal" checked><span data-i18n="speedNormal">Normal</span></label>
+              <label><input type="radio" name="speed" value="fast"><span data-i18n="speedFast">Fast</span></label>
+            </div>
+          </div>
+        </div>
+        <p class="section-footer" id="speed-hint"></p>
+
+        <h3 class="section-header" data-i18n="exportSection">Export</h3>
+        <div class="group">
+          <label class="cell" for="meName"><span class="cell-title"><span data-i18n="yourName">Your name</span><button class="info" data-tip="tipYourName"><svg><use href="#i-info"/></svg></button></span><input type="text" id="meName" class="inline-input" maxlength="40"></label>
+          <label class="cell" for="maxPerChat"><span class="cell-title"><span data-i18n="maxPerChat">Max per chat</span><button class="info" data-tip="tipMaxPerChat"><svg><use href="#i-info"/></svg></button></span><input type="number" id="maxPerChat" class="inline-input" min="0" step="500" data-i18n-placeholder="noLimit"></label>
+          <label class="cell" for="includeSystem"><span class="cell-title"><span data-i18n="systemMessages">System messages</span><button class="info" data-tip="tipSystem"><svg><use href="#i-info"/></svg></button></span><span class="switch"><input type="checkbox" id="includeSystem"><span class="track"></span></span></label>
+          <label class="cell" for="quick"><span class="cell-title"><span data-i18n="onlyLoaded">Only loaded messages</span><button class="info" data-tip="tipOnlyLoaded"><svg><use href="#i-info"/></svg></button></span><span class="switch"><input type="checkbox" id="quick"><span class="track"></span></span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+
+  <script src="panel.js"></script>
+</body>
+</html>

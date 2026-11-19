@@ -1,0 +1,14 @@
+{
+  "name": "wanalisis",
+  "version": "2.4.1",
+  "private": true,
+  "description": "Chrome extension to bulk-export WhatsApp Web chats to JSON/CSV",
+  "scripts": {
+    "test": "node tests/privacy-audit.mjs && node tests/manifest-check.mjs && node tests/e2e.mjs",
+    "audit:privacy": "node tests/privacy-audit.mjs",
+    "package": "node tests/privacy-audit.mjs && node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}

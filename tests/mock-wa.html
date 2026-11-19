@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>WhatsApp (simulado)</title></head>
+<body>
+<p>WhatsApp Web simulado para pruebas</p>
+<script>
+/*
+ * Simula los modulos internos de WhatsApp Web que usa exporter.js:
+ * WAWebCollections (Chat, Contact), WAWebChatLoadMessages, WAWebContactGetters,
+ * WAWebWidFactory y WAWebUserPrefsMeUser.
+ */
+(() => {
+  // Hace 2 horas: Ana y Banco tienen actividad en el ultimo dia, el grupo hace ~10 dias, 'Historial grande' hace ~1 ano.
+  const NOW = Math.floor(Date.now() / 1000) - 7200;
+  const ME = '5215500000000@c.us';
+  let seq = 0;
+
+  window.__legacySig = false; // true: loadEarlierMsgs solo acepta (chat)
+  window.__loadCalls = 0;
+
+  function makeMsg(chatJid, i, fields, useDollar) {
+    const fromMe = !!fields.fromMe;
+    const idStr = `${fromMe}_${chatJid}_MSG${++seq}`;
+    const id = useDollar
+      ? { fromMe, remote: { $1: chatJid }, id: `MSG${seq}`, $1: idStr }
+      : { fromMe, remote: chatJid, id: `MSG${seq}`, _serialized: idStr };
+    const data = Object.assign({ id, t: fields.t, type: 'chat', from: fromMe ? ME : chatJid, to: fromMe ? chatJid : ME }, fields);
+    delete data.fromMe;
+    return Object.assign({}, data, { serialize() { return JSON.parse(JSON.stringify(data)); } });
+  }
+
+  function makeChat({ jid, title, archive, all, initial, group, pageSize = 50 }) {
+    // all: mensajes ordenados por t ascendente; inicialmente solo los ultimos `initial` estan cargados
+    const loaded = all.slice(-initial);
+    let remaining = all.slice(0, all.length - initial);
+    const msgs = {
+      models: loaded,
+      msgLoadState: { noEarlierMsgs: remaining.length === 0 },
+      getModelsArray() { return this.models.slice(); },
+    };
+    const chat = {
+      id: { _serialized: jid, user: jid.split('@')[0], server: jid.split('@')[1] },
+      formattedTitle: title, name: title, archive: !!archive, pin: false,
+      t: all.length ? all[all.length - 1].t : NOW,
+      msgs,
+      _pageSize: pageSize,
+      _loadOlder(n) {
+        const batch = remaining.slice(-n);
+        remaining = remaining.slice(0, remaining.length - batch.length);
+        msgs.models = batch.concat(msgs.models);
+        msgs.msgLoadState.noEarlierMsgs = remaining.length === 0;
+        return batch;
+      },
+      _push(m) { msgs.models.push(m); chat.t = m.t; },
+      _reset() {
+        const everything = remaining.concat(msgs.models);
+        msgs.models = everything.slice(-initial);
+        remaining = everything.slice(0, everything.length - msgs.models.length);
+        msgs.msgLoadState.noEarlierMsgs = remaining.length === 0;
+      },
+    };
+    if (group) chat.groupMetadata = group;
+    return chat;
+  }
+
+  // ---- Chat 1: individual con historial largo (ids con $1) ----
+  const ANA = '5215511111111@c.us';
+  const anaMsgs = [];
+  for (let i = 0; i < 230; i++) {
+    anaMsgs.push(makeMsg(ANA, i, { t: NOW - (230 - i) * 3600, fromMe: i % 3 === 0, body: `Mensaje ${i} con Ana` }, true));
+  }
+  const ana = makeChat({ jid: ANA, title: 'Ana López', all: anaMsgs, initial: 30 });
+
+  // ---- Chat 2: grupo con multimedia, sistema, cita, ubicacion, menciones ----
+  const GRP = '120363000000000001@g.us';
+  const P1 = '5215522222222@c.us', P2 = '5215533333333@c.us', P3 = '5215544444444@c.us', P4 = '99887766554433@lid';
+  const thumb = 'A'.repeat(5000); // simula miniatura base64 en body de imagen
+  const g = [];
+  let t0 = NOW - 86400 * 10;
+  g.push(makeMsg(GRP, 0, { t: t0++, type: 'gp2', subtype: 'create', isNotification: true, author: P1 }));
+  g.push(makeMsg(GRP, 0, { t: t0++, author: P1, body: 'Hola equipo, bienvenidos' }));
+  const quoted = makeMsg(GRP, 0, { t: t0++, author: P2, body: 'Cuando es la junta?' });
+  g.push(quoted);
+  g.push(makeMsg(GRP, 0, { t: t0++, fromMe: true, body: 'El lunes a las 10', quotedStanzaID: 'MSGQ', quotedParticipant: P2, quotedMsg: { type: 'chat', body: 'Cuando es la junta?' } }));
+  g.push(makeMsg(GRP, 0, { t: t0++, author: P3, notifyName: 'Pedrito', type: 'image', body: thumb, caption: 'Foto del pizarron', mimetype: 'image/jpeg', directPath: '/v/x', size: 12345 }));
+  g.push(makeMsg(GRP, 0, { t: t0++, author: P4, type: 'location', body: thumb, lat: 19.43, lng: -99.13, loc: 'Oficina CDMX' }));
+  g.push(makeMsg(GRP, 0, { t: t0++, author: P1, type: 'ptt', body: thumb, mimetype: 'audio/ogg; codecs=opus', duration: '12', directPath: '/v/y' }));
+  g.push(makeMsg(GRP, 0, { t: t0++, author: P2, body: '@5215522222222 revisa esto', mentionedJidList: [{ _serialized: P1 }] }));
+  g.push(makeMsg(GRP, 0, { t: t0++, author: P1, type: 'revoked' }));
+  g.push(makeMsg(GRP, 0, { t: t0++, author: P3, type: 'document', body: thumb, filename: 'cotizacion.pdf', mimetype: 'application/pdf', directPath: '/v/z', isForwarded: true }));
+  const participants = [P1, P2, P3, P4].map((p, i) => ({ id: { _serialized: p }, isAdmin: i === 0 }));
+  const group = { desc: 'Grupo de ventas', participants: { getModelsArray: () => participants } };
+  const grp = makeChat({ jid: GRP, title: 'Equipo Ventas', all: g, initial: 4, group });
+
+  // ---- Chat 3: archivado, con caracteres conflictivos para CSV ----
+  const BANK = '5215555555555@c.us';
+  const b = [
+    makeMsg(BANK, 0, { t: NOW - 5000, body: 'Linea 1\nLinea 2, con coma y "comillas"' }),
+    makeMsg(BANK, 0, { t: NOW - 4000, fromMe: true, body: 'Gracias 🙏 ñandú' }),
+  ];
+  const bank = makeChat({ jid: BANK, title: 'Banco, S.A. "Atención"', archive: true, all: b, initial: 2 });
+
+  // ---- Chat 4: estados (debe excluirse) ----
+  const status = makeChat({ jid: 'status@broadcast', title: 'Estados', all: [makeMsg('status@broadcast', 0, { t: NOW, body: 'estado' })], initial: 1 });
+
+  // ---- Chat 5: historial grande para medir rendimiento ----
+  const BIG = '5215566666666@c.us';
+  const bigMsgs = [];
+  for (let i = 0; i < 20000; i++) {
+    bigMsgs.push(makeMsg(BIG, i, { t: NOW - 86400 * 400 + i * 60, fromMe: i % 2 === 0, body: `Mensaje largo numero ${i}, con texto de relleno para simular una conversacion real.` }));
+  }
+  const big = makeChat({ jid: BIG, title: 'Historial grande', all: bigMsgs, initial: 40, pageSize: 500 });
+
+  const chats = [bank, ana, grp, status, big];
+
+  const contacts = {
+    [ANA]: { id: { _serialized: ANA }, name: 'Ana López', pushname: 'Ani' },
+    [P1]: { id: { _serialized: P1 }, name: 'Carlos Ruiz' },
+    [P2]: { id: { _serialized: P2 }, pushname: 'Lucía' },
+    [BANK]: { id: { _serialized: BANK }, verifiedName: 'Banco, S.A.' },
+  };
+
+  const mods = {
+    WAWebCollections: {
+      Chat: { getModelsArray: () => chats.slice() },
+      Contact: { get: (id) => contacts[typeof id === 'string' ? id : id._serialized] },
+    },
+    WAWebChatLoadMessages: {
+      loadEarlierMsgs: async (arg) => {
+        window.__loadCalls++;
+        let chat;
+        if (window.__legacySig) {
+          if (!arg || !arg.msgs) throw new TypeError('Cannot read properties of undefined (msgs)');
+          chat = arg;
+        } else {
+          if (!arg || !arg.chat) throw new TypeError('Cannot read properties of undefined (chat)');
+          chat = arg.chat;
+        }
+        await new Promise((r) => setTimeout(r, 5));
+        return chat._loadOlder(chat._pageSize);
+      },
+    },
+    WAWebContactGetters: {
+      getName: (c) => c.name,
+      getPushname: (c) => c.pushname,
+    },
+    WAWebWidFactory: { createWid: (s) => ({ _serialized: s }) },
+    WAWebUserPrefsMeUser: { getMaybeMePnUser: () => ({ _serialized: ME }) },
+  };
+
+  window.require = (name) => {
+    if (!(name in mods)) throw new Error(`Requiring unknown module "${name}"`);
+    return mods[name];
+  };
+
+  window.__mock = {
+    chats, ANA, NOW,
+    resetHistory() { chats.forEach((c) => c._reset()); },
+    ageAll(sec) { chats.forEach((c) => { c.t -= sec; }); },
+    addNewAnaMessage() { ana._push(makeMsg(ANA, 0, { t: NOW + 60, body: 'Mensaje nuevo despues de exportar' }, true)); },
+  };
+})();
+</script>
+</body>
+</html>
